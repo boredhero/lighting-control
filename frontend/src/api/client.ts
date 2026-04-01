@@ -1,17 +1,24 @@
 const API_BASE = '/api'
+let isRefreshing = false
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, _isRetry = false): Promise<T> {
   const token = localStorage.getItem('access_token')
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options.headers as Record<string, string> }
   if (token) headers['Authorization'] = `Bearer ${token}`
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
-  if (res.status === 401) {
-    const refreshed = await tryRefresh()
-    if (refreshed) return request<T>(path, options)
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    window.location.href = '/login'
-    throw new Error('Unauthorized')
+  if (res.status === 401 && !_isRetry) {
+    const body = await res.clone().json().catch(() => ({ detail: '' }))
+    const isTokenIssue = !body.detail || body.detail === 'Invalid token' || body.detail === 'Token revoked' || body.detail === 'User not found'
+    if (isTokenIssue && !isRefreshing) {
+      isRefreshing = true
+      const refreshed = await tryRefresh()
+      isRefreshing = false
+      if (refreshed) return request<T>(path, options, true)
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
+    }
+    throw new Error(body.detail || 'Unauthorized')
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }))
