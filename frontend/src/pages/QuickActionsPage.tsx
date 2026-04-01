@@ -1,18 +1,21 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Zap, Plus } from 'lucide-react'
+import { CreateQuickActionDialog } from '@/components/CreateQuickActionDialog'
 
 interface QuickAction { id: string; name: string; icon: string | null; sort_order: number; targets: unknown[] }
 
 export function QuickActionsPage() {
+  const [createOpen, setCreateOpen] = useState(false)
   const { data: quickActions = [] } = useQuery<QuickAction[]>({ queryKey: ['quick-actions'], queryFn: () => api.get('/quick-actions') })
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Quick Actions</h2>
-        <Button><Plus size={16} className="mr-2" />Create</Button>
+        <Button onClick={() => setCreateOpen(true)}><Plus size={16} className="mr-2" />Create</Button>
       </div>
       {quickActions.length === 0 ? (
         <p className="text-muted-foreground">No quick actions yet. Create one to get started.</p>
@@ -28,6 +31,7 @@ export function QuickActionsPage() {
           ))}
         </div>
       )}
+      <CreateQuickActionDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   )
 }
