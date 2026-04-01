@@ -24,7 +24,7 @@ export function TOTPSetupDialog({ open, onOpenChange }: Props) {
     onError: (err: Error) => toast.error(err.message),
   })
   const enableMutation = useMutation({
-    mutationFn: () => api.post('/auth/me/totp/enable', { code, partial_token: secret }),
+    mutationFn: () => api.post('/auth/me/totp/enable', { code, secret }),
     onSuccess: () => { toast.success('TOTP enabled!'); queryClient.invalidateQueries({ queryKey: ['user'] }); resetAndClose() },
     onError: (err: Error) => toast.error(err.message),
   })

@@ -16,7 +16,7 @@ def get_totp_uri(secret: str, username: str) -> str:
 
 def verify_totp_code(secret: str, code: str) -> bool:
     totp = pyotp.TOTP(secret)
-    return totp.verify(code, valid_window=1)
+    return totp.verify(code, valid_window=2)
 
 
 async def enable_totp(db: AsyncSession, user: User, secret: str) -> None:
