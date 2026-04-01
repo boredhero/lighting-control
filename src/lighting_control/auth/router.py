@@ -1,6 +1,9 @@
 """Auth API endpoints."""
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from lighting_control.auth import schemas, service, totp
 from lighting_control.auth.dependencies import get_current_user, require_admin
@@ -157,8 +160,11 @@ async def setup_totp(user: User = Depends(get_current_user)):
 
 @router.post("/me/totp/enable", status_code=status.HTTP_204_NO_CONTENT)
 async def enable_totp(req: schemas.TOTPEnableRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    import pyotp
+    expected = pyotp.TOTP(req.secret).now()
+    logger.info(f"TOTP enable: secret_len={len(req.secret)} code={req.code} expected={expected} match={req.code == expected}")
     if not totp.verify_totp_code(req.secret, req.code):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP code")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid TOTP code. Expected a code from your authenticator app. Server time: {datetime.now(timezone.utc).isoformat()}")
     await totp.enable_totp(db, user, req.secret)
     await db.commit()
 
