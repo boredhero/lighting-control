@@ -147,7 +147,12 @@ async def setup_totp(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="TOTP already enabled")
     secret = totp.generate_totp_secret()
     uri = totp.get_totp_uri(secret, user.username)
-    return schemas.TOTPSetupResponse(secret=secret, qr_uri=uri)
+    import qrcode, io, base64
+    qr = qrcode.make(uri)
+    buf = io.BytesIO()
+    qr.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+    return schemas.TOTPSetupResponse(secret=secret, qr_uri=uri, qr_image=f"data:image/png;base64,{qr_b64}")
 
 
 @router.post("/me/totp/enable", status_code=status.HTTP_204_NO_CONTENT)
