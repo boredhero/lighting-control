@@ -15,12 +15,12 @@ interface Props {
 export function TOTPSetupDialog({ open, onOpenChange }: Props) {
   const [step, setStep] = useState<'generate' | 'verify'>('generate')
   const [secret, setSecret] = useState('')
-  const [qrUri, setQrUri] = useState('')
+  const [qrImage, setQrImage] = useState('')
   const [code, setCode] = useState('')
   const queryClient = useQueryClient()
   const setupMutation = useMutation({
-    mutationFn: () => api.post<{ secret: string; qr_uri: string }>('/auth/me/totp/setup'),
-    onSuccess: (data) => { const d = data as { secret: string; qr_uri: string }; setSecret(d.secret); setQrUri(d.qr_uri); setStep('verify') },
+    mutationFn: () => api.post<{ secret: string; qr_uri: string; qr_image: string }>('/auth/me/totp/setup'),
+    onSuccess: (data) => { const d = data as { secret: string; qr_uri: string; qr_image: string }; setSecret(d.secret); setQrImage(d.qr_image); setStep('verify') },
     onError: (err: Error) => toast.error(err.message),
   })
   const enableMutation = useMutation({
@@ -28,7 +28,7 @@ export function TOTPSetupDialog({ open, onOpenChange }: Props) {
     onSuccess: () => { toast.success('TOTP enabled!'); queryClient.invalidateQueries({ queryKey: ['user'] }); resetAndClose() },
     onError: (err: Error) => toast.error(err.message),
   })
-  const resetAndClose = () => { setStep('generate'); setSecret(''); setQrUri(''); setCode(''); onOpenChange(false) }
+  const resetAndClose = () => { setStep('generate'); setSecret(''); setQrImage(''); setCode(''); onOpenChange(false) }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[var(--surface-1)] border-border max-w-sm">
@@ -43,9 +43,14 @@ export function TOTPSetupDialog({ open, onOpenChange }: Props) {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-muted-foreground">Scan this QR URI in your authenticator app, or enter the secret manually:</p>
-            <div className="p-3 bg-[var(--surface-2)] rounded text-xs font-mono break-all select-all">{qrUri}</div>
-            <div className="p-2 bg-[var(--surface-2)] rounded text-xs font-mono text-center select-all">{secret}</div>
+            <p className="text-sm text-muted-foreground">Scan this QR code with your authenticator app:</p>
+            <div className="flex justify-center p-4 bg-white rounded-lg">
+              <img src={qrImage} alt="TOTP QR Code" className="w-48 h-48" />
+            </div>
+            <details className="text-xs">
+              <summary className="text-muted-foreground cursor-pointer">Can't scan? Enter manually</summary>
+              <div className="mt-2 p-2 bg-[var(--surface-2)] rounded font-mono text-center select-all">{secret}</div>
+            </details>
             <div className="flex flex-col gap-2"><Label>Enter the 6-digit code from your app</Label><Input value={code} onChange={(e) => setCode(e.target.value)} maxLength={6} placeholder="000000" autoFocus /></div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={resetAndClose}>Cancel</Button>
