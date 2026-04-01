@@ -156,10 +156,10 @@ async def setup_totp(user: User = Depends(get_current_user)):
 
 
 @router.post("/me/totp/enable", status_code=status.HTTP_204_NO_CONTENT)
-async def enable_totp(req: schemas.TOTPVerifyRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    if not totp.verify_totp_code(req.partial_token, req.code):
+async def enable_totp(req: schemas.TOTPEnableRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    if not totp.verify_totp_code(req.secret, req.code):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP code")
-    await totp.enable_totp(db, user, req.partial_token)
+    await totp.enable_totp(db, user, req.secret)
     await db.commit()
 
 

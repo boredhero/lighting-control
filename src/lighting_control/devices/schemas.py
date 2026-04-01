@@ -1,6 +1,6 @@
 """Device Pydantic schemas."""
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeviceResponse(BaseModel):
@@ -18,8 +18,7 @@ class DeviceResponse(BaseModel):
     is_online: bool
     last_state: dict | None
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DeviceControlRequest(BaseModel):
@@ -51,8 +50,7 @@ class RoomResponse(BaseModel):
     icon: str | None
     sort_order: int
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ZoneRequest(BaseModel):
@@ -66,8 +64,7 @@ class ZoneResponse(BaseModel):
     icon: str | None
     sort_order: int
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GroupRequest(BaseModel):
@@ -83,5 +80,4 @@ class GroupResponse(BaseModel):
     sort_order: int
     device_ids: list[str]
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
