@@ -39,6 +39,7 @@ async def update_quick_action(db: AsyncSession, qa_id: str, name: str, icon: str
         target = QuickActionTarget(quick_action_id=qa.id, target_type=TargetType(t["target_type"]), target_id=t.get("target_id"), exclude_device_ids=t.get("exclude_device_ids"), state=t["state"])
         db.add(target)
     await db.flush()
+    db.expunge(qa)
     return await get_quick_action(db, qa.id)
 
 
