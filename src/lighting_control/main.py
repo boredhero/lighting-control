@@ -1,10 +1,11 @@
 """FastAPI application factory."""
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 import subprocess
 import yaml
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
@@ -17,6 +18,7 @@ from lighting_control.schedules.router import router as schedules_router, settin
 from lighting_control.notifications.router import router as notifications_router
 from lighting_control.websocket.router import router as ws_router
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +51,14 @@ def create_app() -> FastAPI:
     info = _load_info()
     application = FastAPI(title=info.get("name", "Lighting Control Dashboard"), version=info.get("version", "dev"), lifespan=lifespan)
     application.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+    @application.middleware("http")
+    async def log_requests(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000
+        if request.url.path.startswith("/api"):
+            logger.info(f"{request.method} {request.url.path} {response.status_code} {duration_ms:.1f}ms")
+        return response
     for r in [auth_router, devices_router, rooms_router, zones_router, groups_router, scenes_router, qa_router, schedules_router, settings_router, notifications_router]:
         application.include_router(r, prefix="/api")
     application.include_router(ws_router)
