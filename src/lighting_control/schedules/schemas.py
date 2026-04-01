@@ -1,6 +1,6 @@
 """Schedule Pydantic schemas."""
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ScheduleTriggerRequest(BaseModel):
@@ -36,8 +36,7 @@ class ScheduleTriggerResponse(BaseModel):
     cron_expression: str | None
     offset_minutes: int | None
     webhook_url: str | None = None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScheduleTargetResponse(BaseModel):
@@ -46,8 +45,7 @@ class ScheduleTargetResponse(BaseModel):
     target_id: str | None
     exclude_device_ids: list[str] | None
     state: dict
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScheduleResponse(BaseModel):
@@ -60,8 +58,7 @@ class ScheduleResponse(BaseModel):
     updated_at: datetime
     triggers: list[ScheduleTriggerResponse]
     targets: list[ScheduleTargetResponse]
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LocationSettings(BaseModel):

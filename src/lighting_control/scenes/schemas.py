@@ -1,6 +1,6 @@
 """Scene Pydantic schemas."""
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # The 37 built-in WiZ scenes
@@ -47,8 +47,7 @@ class CustomSceneResponse(BaseModel):
     created_by: str
     created_at: datetime
     is_builtin: bool = False
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SceneListResponse(BaseModel):
