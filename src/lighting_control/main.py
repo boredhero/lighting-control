@@ -2,9 +2,8 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+import subprocess
 import yaml
-from alembic.config import Config as AlembicConfig
-from alembic import command as alembic_command
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,10 +32,12 @@ def _load_info() -> dict:
 async def lifespan(app: FastAPI):
     settings.data_dir_path
     try:
-        alembic_cfg = AlembicConfig(str(Path(__file__).parent.parent.parent / "alembic.ini"))
-        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
-        alembic_command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations applied")
+        alembic_ini = str(Path(__file__).parent.parent.parent / "alembic.ini")
+        result = subprocess.run(["uv", "run", "alembic", "-c", alembic_ini, "upgrade", "head"], capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            logger.info("Database migrations applied")
+        else:
+            logger.warning(f"Alembic migration failed: {result.stderr}")
     except Exception as e:
         logger.warning(f"Alembic migration skipped: {e}")
     logger.info("Lighting Control Dashboard starting up")
