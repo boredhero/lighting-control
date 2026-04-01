@@ -162,7 +162,7 @@ async def setup_totp(user: User = Depends(get_current_user)):
 async def enable_totp(req: schemas.TOTPEnableRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     import pyotp
     expected = pyotp.TOTP(req.secret).now()
-    logger.info(f"TOTP enable: secret_len={len(req.secret)} code={req.code} expected={expected} match={req.code == expected}")
+    logger.info(f"TOTP enable: secret={req.secret[:8]}... code={req.code} expected={expected} match={req.code == expected}")
     if not totp.verify_totp_code(req.secret, req.code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid TOTP code. Expected a code from your authenticator app. Server time: {datetime.now(timezone.utc).isoformat()}")
     await totp.enable_totp(db, user, req.secret)
@@ -180,6 +180,14 @@ async def create_api_key(req: schemas.APIKeyCreateRequest, user: User = Depends(
     api_key, raw_key = await service.create_api_key(db, user.id, req.name, req.permissions)
     await db.commit()
     return schemas.APIKeyCreateResponse(id=api_key.id, name=api_key.name, raw_key=raw_key, created_at=api_key.created_at)
+
+
+@router.post("/me/totp/debug")
+async def debug_totp(req: schemas.TOTPEnableRequest, user: User = Depends(get_current_user)):
+    """Temporary debug endpoint — shows what code the server expects."""
+    import pyotp
+    t = pyotp.TOTP(req.secret)
+    return {"your_code": req.code, "server_code": t.now(), "secret_preview": req.secret[:8] + "...", "match": t.verify(req.code, valid_window=2)}
 
 
 @router.get("/users", response_model=list[schemas.UserResponse])
