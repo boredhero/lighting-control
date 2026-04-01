@@ -1,41 +1,83 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth'
+import { api } from '@/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useNavigate } from 'react-router-dom'
+import { Trash2, UserPlus, Link2, Shield, Key, Users } from 'lucide-react'
+import { toast } from 'sonner'
+import { TOTPSetupDialog } from '@/components/TOTPSetupDialog'
+import { CreateGuestDialog } from '@/components/CreateGuestDialog'
+import { InviteLinkDialog } from '@/components/InviteLinkDialog'
+
+interface UserItem { id: string; username: string; is_admin: boolean; is_guest: boolean; guest_expires_at: string | null; totp_enabled: boolean; created_at: string }
 
 export function SettingsPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [totpOpen, setTotpOpen] = useState(false)
+  const [guestOpen, setGuestOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const { data: users = [] } = useQuery<UserItem[]>({ queryKey: ['users'], queryFn: () => api.get('/auth/users'), enabled: user?.is_admin === true })
+  const deleteMutation = useMutation({ mutationFn: (id: string) => api.delete(`/auth/users/${id}`), onSuccess: () => { toast.success('User deleted'); queryClient.invalidateQueries({ queryKey: ['users'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const disableTotpMutation = useMutation({ mutationFn: () => api.delete('/auth/me/totp'), onSuccess: () => { toast.success('TOTP disabled'); queryClient.invalidateQueries({ queryKey: ['user'] }); window.location.reload() }, onError: (err: Error) => toast.error(err.message) })
   const handleLogout = async () => { await logout(); navigate('/login') }
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <h2 className="text-xl font-semibold">Settings</h2>
       <Card className="bg-[var(--surface-1)] border-border">
-        <CardHeader><CardTitle>Account</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Shield size={18} />Account</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-2 text-sm">
             <span className="text-muted-foreground">Username</span><span>{user?.username}</span>
             <span className="text-muted-foreground">Role</span><span>{user?.is_admin ? 'Admin' : user?.is_guest ? 'Guest' : 'User'}</span>
-            <span className="text-muted-foreground">TOTP</span><span>{user?.totp_enabled ? 'Enabled' : 'Disabled'}</span>
+            <span className="text-muted-foreground">TOTP</span><Badge variant={user?.totp_enabled ? 'default' : 'secondary'}>{user?.totp_enabled ? 'Enabled' : 'Disabled'}</Badge>
           </div>
           <Separator />
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm">Change Password</Button>
-            <Button variant="outline" size="sm">{user?.totp_enabled ? 'Disable' : 'Enable'} TOTP</Button>
+          <div className="flex gap-2 flex-wrap">
+            {user?.totp_enabled ? (
+              <Button variant="outline" size="sm" onClick={() => disableTotpMutation.mutate()}>Disable TOTP</Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setTotpOpen(true)}><Key size={14} className="mr-1" />Enable TOTP</Button>
+            )}
           </div>
         </CardContent>
       </Card>
       {user?.is_admin && (
         <Card className="bg-[var(--surface-1)] border-border">
-          <CardHeader><CardTitle>User Management</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" size="sm">Create Guest Account</Button>
-            <Button variant="outline" size="sm">Generate Invite Link</Button>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Users size={18} />User Management</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => setGuestOpen(true)}><UserPlus size={14} className="mr-1" />Create Guest</Button>
+              <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}><Link2 size={14} className="mr-1" />Generate Invite Link</Button>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground">All Users</h3>
+              {users.map((u) => (
+                <div key={u.id} className="flex items-center justify-between py-2 px-3 bg-[var(--surface-2)] rounded">
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-sm">{u.username}</span>
+                    {u.is_admin && <Badge variant="default">Admin</Badge>}
+                    {u.is_guest && <Badge variant="secondary">Guest</Badge>}
+                    {u.totp_enabled && <Badge variant="outline">TOTP</Badge>}
+                    {u.is_guest && u.guest_expires_at && <span className="text-xs text-muted-foreground">Expires: {new Date(u.guest_expires_at).toLocaleDateString()}</span>}
+                  </div>
+                  {u.id !== user?.id && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete user "${u.username}"?`)) deleteMutation.mutate(u.id) }}><Trash2 size={14} className="text-destructive" /></Button>}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
       <Button variant="destructive" onClick={handleLogout} className="w-full">Sign Out</Button>
+      <TOTPSetupDialog open={totpOpen} onOpenChange={setTotpOpen} />
+      <CreateGuestDialog open={guestOpen} onOpenChange={setGuestOpen} />
+      <InviteLinkDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
   )
 }
