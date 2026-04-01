@@ -92,7 +92,7 @@ async def create_session(db: AsyncSession, user_id: str, access_token: str, refr
 
 async def is_token_revoked(db: AsyncSession, token: str) -> bool:
     token_h = hash_token(token)
-    result = await db.execute(select(Session).where(Session.token_hash == token_h))
+    result = await db.execute(select(Session).where(Session.token_hash == token_h).order_by(Session.created_at.desc()).limit(1))
     session = result.scalar_one_or_none()
     if session is None:
         return True
