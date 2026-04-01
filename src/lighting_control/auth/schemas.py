@@ -1,6 +1,6 @@
 """Auth Pydantic schemas for request/response validation."""
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SetupRequest(BaseModel):
@@ -20,6 +20,11 @@ class LoginRequest(BaseModel):
 class TOTPVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6)
     partial_token: str
+
+
+class TOTPEnableRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+    secret: str
 
 
 class TokenResponse(BaseModel):
@@ -68,8 +73,7 @@ class UserResponse(BaseModel):
     permissions: dict
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TOTPSetupResponse(BaseModel):
@@ -99,5 +103,4 @@ class PasskeyResponse(BaseModel):
     id: str
     name: str
     created_at: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

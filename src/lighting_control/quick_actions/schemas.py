@@ -1,6 +1,6 @@
 """Quick action Pydantic schemas."""
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuickActionTargetRequest(BaseModel):
@@ -28,8 +28,7 @@ class QuickActionTargetResponse(BaseModel):
     target_id: str | None
     exclude_device_ids: list[str] | None
     state: dict
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class QuickActionResponse(BaseModel):
@@ -41,8 +40,7 @@ class QuickActionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     targets: list[QuickActionTargetResponse]
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReorderRequest(BaseModel):
