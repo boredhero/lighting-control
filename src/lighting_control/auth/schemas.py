@@ -22,6 +22,11 @@ class TOTPVerifyRequest(BaseModel):
     partial_token: str
 
 
+class TOTPEnableRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+    secret: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
