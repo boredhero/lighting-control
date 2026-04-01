@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///app/data/lighting.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:////app/data/lighting.db"
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     # Data storage
