@@ -70,6 +70,7 @@ class UserResponse(BaseModel):
 class TOTPSetupResponse(BaseModel):
     secret: str
     qr_uri: str
+    qr_image: str
 
 
 class APIKeyCreateRequest(BaseModel):
