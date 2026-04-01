@@ -1,4 +1,5 @@
 """Auth API endpoints."""
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from lighting_control.auth import schemas, service, totp
@@ -31,7 +32,6 @@ async def login(req: schemas.LoginRequest, db: AsyncSession = Depends(get_sessio
     if user is None or not service.verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if user.is_guest and user.guest_expires_at:
-        from datetime import datetime, timezone
         if user.guest_expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guest account expired")
     if user.totp_enabled:
