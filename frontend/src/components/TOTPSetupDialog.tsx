@@ -17,21 +17,28 @@ export function TOTPSetupDialog({ open, onOpenChange }: Props) {
   const [secret, setSecret] = useState('')
   const [qrImage, setQrImage] = useState('')
   const [code, setCode] = useState('')
+  const [debugInfo, setDebugInfo] = useState('')
   const queryClient = useQueryClient()
-  useEffect(() => { if (!open) { setStep('generate'); setSecret(''); setQrImage(''); setCode('') } }, [open])
+  useEffect(() => { if (!open) { setStep('generate'); setSecret(''); setQrImage(''); setCode(''); setDebugInfo('') } }, [open])
   const setupMutation = useMutation({
     mutationFn: () => api.post<{ secret: string; qr_uri: string; qr_image: string }>('/auth/me/totp/setup'),
-    onSuccess: (data) => { const d = data as { secret: string; qr_uri: string; qr_image: string }; setSecret(d.secret); setQrImage(d.qr_image); setCode(''); setStep('verify') },
+    onSuccess: (data) => { const d = data as { secret: string; qr_uri: string; qr_image: string }; setSecret(d.secret); setQrImage(d.qr_image); setCode(''); setDebugInfo('') ; setStep('verify') },
     onError: (err: Error) => toast.error(err.message),
   })
   const enableMutation = useMutation({
-    mutationFn: () => api.post('/auth/me/totp/enable', { code, secret }),
+    mutationFn: async () => {
+      const debug = await api.post<{ your_code: string; server_code: string; secret_preview: string; match: boolean }>('/auth/me/totp/debug', { code, secret })
+      const d = debug as { your_code: string; server_code: string; secret_preview: string; match: boolean }
+      setDebugInfo(`Your code: ${d.your_code} | Server expects: ${d.server_code} | Secret: ${d.secret_preview} | Match: ${d.match}`)
+      if (!d.match) throw new Error(`Code mismatch — server expects ${d.server_code} for secret ${d.secret_preview}`)
+      return api.post('/auth/me/totp/enable', { code, secret })
+    },
     onSuccess: () => { toast.success('TOTP enabled!'); queryClient.invalidateQueries({ queryKey: ['user'] }); onOpenChange(false) },
     onError: (err: Error) => { toast.error(err.message); setCode('') },
   })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[var(--surface-1)] border-border max-w-sm">
+      <DialogContent className="bg-[var(--surface-1)] border-border max-w-md">
         <DialogHeader><DialogTitle>Enable TOTP</DialogTitle></DialogHeader>
         {step === 'generate' ? (
           <div className="flex flex-col gap-4">
@@ -47,13 +54,14 @@ export function TOTPSetupDialog({ open, onOpenChange }: Props) {
             <div className="flex justify-center p-4 bg-white rounded-lg">
               <img src={qrImage} alt="TOTP QR Code" className="w-48 h-48" />
             </div>
-            <details className="text-xs">
-              <summary className="text-muted-foreground cursor-pointer">Can't scan? Enter manually</summary>
-              <div className="mt-2 p-2 bg-[var(--surface-2)] rounded font-mono text-center select-all">{secret}</div>
-            </details>
+            <div className="p-2 bg-[var(--surface-2)] rounded">
+              <p className="text-xs text-muted-foreground mb-1">Secret (verify this matches your authenticator):</p>
+              <p className="font-mono text-sm text-center select-all break-all">{secret}</p>
+            </div>
             <div className="flex flex-col gap-2"><Label>Enter the 6-digit code from your app</Label><Input value={code} onChange={(e) => setCode(e.target.value)} maxLength={6} placeholder="000000" autoFocus /></div>
+            {debugInfo && <div className="p-2 bg-[var(--surface-3)] rounded text-xs font-mono break-all">{debugInfo}</div>}
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => { setStep('generate'); setSecret(''); setQrImage(''); setCode('') }}>Start Over</Button>
+              <Button variant="outline" onClick={() => { setStep('generate'); setSecret(''); setQrImage(''); setCode(''); setDebugInfo('') }}>Start Over</Button>
               <Button onClick={() => enableMutation.mutate()} disabled={code.length !== 6 || enableMutation.isPending}>{enableMutation.isPending ? 'Verifying...' : 'Enable TOTP'}</Button>
             </div>
           </div>
