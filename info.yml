@@ -1,0 +1,6 @@
+name: Lighting Control Dashboard
+version: 0.1.0
+description: Smart home lighting control web app for WiZ devices
+license: GPL-3.0-or-later
+repository: https://github.com/boredhero/lighting-control
+author: boredhero

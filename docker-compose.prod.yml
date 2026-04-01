@@ -1,0 +1,59 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: lighting-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - lighting_redis:/data
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  api:
+    image: ghcr.io/boredhero/lighting-control:latest
+    container_name: lighting-api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///app/data/lighting.db
+      REDIS_URL: redis://127.0.0.1:6379/0
+      DATA_DIR: /app/data
+      JWT_SECRET: ${JWT_SECRET}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_CONTACT_EMAIL: ${VAPID_CONTACT_EMAIL:-mailto:you@example.com}
+    volumes:
+      - lighting_data:/app/data
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8420/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  celery-worker:
+    image: ghcr.io/boredhero/lighting-control:latest
+    container_name: lighting-worker
+    restart: unless-stopped
+    network_mode: host
+    command: ["uv", "run", "celery", "-A", "lighting_control.tasks.celery_app", "worker", "-B", "--loglevel=info", "--concurrency=2"]
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:///app/data/lighting.db
+      REDIS_URL: redis://127.0.0.1:6379/0
+      DATA_DIR: /app/data
+      JWT_SECRET: ${JWT_SECRET}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_CONTACT_EMAIL: ${VAPID_CONTACT_EMAIL:-mailto:you@example.com}
+    volumes:
+      - lighting_data:/app/data
+    depends_on:
+      redis:
+        condition: service_started
+
+volumes:
+  lighting_redis:
+  lighting_data:
