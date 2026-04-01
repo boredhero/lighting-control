@@ -136,3 +136,34 @@ async def create_api_key(db: AsyncSession, user_id: str, name: str, permissions:
 async def get_api_key_by_hash(db: AsyncSession, key_hash: str) -> APIKey | None:
     result = await db.execute(select(APIKey).where(APIKey.key_hash == key_hash))
     return result.scalar_one_or_none()
+
+
+async def get_all_users(db: AsyncSession) -> list[User]:
+    result = await db.execute(select(User).order_by(User.created_at))
+    return list(result.scalars().all())
+
+
+async def delete_user(db: AsyncSession, user_id: str) -> bool:
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        return False
+    await db.delete(user)
+    await db.flush()
+    return True
+
+
+async def get_user_passkeys(db: AsyncSession, user_id: str) -> list:
+    from lighting_control.auth.models import Passkey
+    result = await db.execute(select(Passkey).where(Passkey.user_id == user_id))
+    return list(result.scalars().all())
+
+
+async def delete_passkey(db: AsyncSession, passkey_id: str, user_id: str) -> bool:
+    from lighting_control.auth.models import Passkey
+    result = await db.execute(select(Passkey).where(Passkey.id == passkey_id, Passkey.user_id == user_id))
+    passkey = result.scalar_one_or_none()
+    if not passkey:
+        return False
+    await db.delete(passkey)
+    await db.flush()
+    return True

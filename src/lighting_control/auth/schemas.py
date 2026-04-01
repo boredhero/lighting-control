@@ -87,3 +87,11 @@ class APIKeyCreateResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=255)
+
+
+class PasskeyResponse(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
