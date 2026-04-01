@@ -23,9 +23,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           { urlPattern: /^https:\/\/.*\/api\//, handler: 'NetworkFirst', options: { cacheName: 'api-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } } },
-          { urlPattern: /\.(js|css|png|svg|woff2?)$/, handler: 'CacheFirst', options: { cacheName: 'static-cache', expiration: { maxEntries: 100, maxAgeSeconds: 86400 } } },
         ],
       },
     }),
