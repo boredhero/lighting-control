@@ -106,11 +106,11 @@ async def create_guest(req: schemas.GuestCreateRequest, admin: User = Depends(re
 
 
 @router.post("/invites", response_model=schemas.InviteCreateResponse)
-async def create_invite(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
-    invite = await service.create_invite(db, admin.id)
+async def create_invite(req: schemas.InviteCreateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    invite = await service.create_invite(db, admin.id, expires_at=req.expires_at)
     await db.commit()
     url = f"{settings.WEBAUTHN_ORIGIN}/register?code={invite.code}"
-    return schemas.InviteCreateResponse(code=invite.code, url=url)
+    return schemas.InviteCreateResponse(code=invite.code, url=url, expires_at=invite.expires_at)
 
 
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)

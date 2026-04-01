@@ -42,9 +42,14 @@ class GuestCreateRequest(BaseModel):
     permissions: dict = Field(default_factory=lambda: {"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": False, "can_view_schedules": True, "can_manage_schedules": False, "can_manage_devices": False, "can_manage_users": False})
 
 
+class InviteCreateRequest(BaseModel):
+    expires_at: datetime | None = None
+
+
 class InviteCreateResponse(BaseModel):
     code: str
     url: str
+    expires_at: datetime | None
 
 
 class RegisterRequest(BaseModel):
