@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      DATABASE_URL: sqlite+aiosqlite:///app/data/lighting.db
+      DATABASE_URL: sqlite+aiosqlite:////app/data/lighting.db
       REDIS_URL: redis://127.0.0.1:6379/0
       DATA_DIR: /app/data
       JWT_SECRET: ${JWT_SECRET}
@@ -41,7 +41,7 @@ services:
     network_mode: host
     command: ["uv", "run", "celery", "-A", "lighting_control.tasks.celery_app", "worker", "-B", "--loglevel=info", "--concurrency=2"]
     environment:
-      DATABASE_URL: sqlite+aiosqlite:///app/data/lighting.db
+      DATABASE_URL: sqlite+aiosqlite:////app/data/lighting.db
       REDIS_URL: redis://127.0.0.1:6379/0
       DATA_DIR: /app/data
       JWT_SECRET: ${JWT_SECRET}
