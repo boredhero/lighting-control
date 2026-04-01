@@ -3,11 +3,20 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 import yaml
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 from lighting_control.config import settings
+from lighting_control.auth.router import router as auth_router
+from lighting_control.devices.router import router as devices_router, rooms_router, zones_router, groups_router
+from lighting_control.scenes.router import router as scenes_router
+from lighting_control.quick_actions.router import router as qa_router
+from lighting_control.schedules.router import router as schedules_router, settings_router
+from lighting_control.notifications.router import router as notifications_router
+from lighting_control.websocket.router import router as ws_router
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +32,13 @@ def _load_info() -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.data_dir_path
+    try:
+        alembic_cfg = AlembicConfig(str(Path(__file__).parent.parent.parent / "alembic.ini"))
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+        alembic_command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations applied")
+    except Exception as e:
+        logger.warning(f"Alembic migration skipped: {e}")
     logger.info("Lighting Control Dashboard starting up")
     yield
     logger.info("Lighting Control Dashboard shutting down")
@@ -32,13 +48,6 @@ def create_app() -> FastAPI:
     info = _load_info()
     application = FastAPI(title=info.get("name", "Lighting Control Dashboard"), version=info.get("version", "dev"), lifespan=lifespan)
     application.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-    from lighting_control.auth.router import router as auth_router
-    from lighting_control.devices.router import router as devices_router, rooms_router, zones_router, groups_router
-    from lighting_control.scenes.router import router as scenes_router
-    from lighting_control.quick_actions.router import router as qa_router
-    from lighting_control.schedules.router import router as schedules_router, settings_router
-    from lighting_control.notifications.router import router as notifications_router
-    from lighting_control.websocket.router import router as ws_router
     for r in [auth_router, devices_router, rooms_router, zones_router, groups_router, scenes_router, qa_router, schedules_router, settings_router, notifications_router]:
         application.include_router(r, prefix="/api")
     application.include_router(ws_router)

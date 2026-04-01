@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
+import { api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,8 +14,16 @@ export function LoginPage() {
   const [totpCode, setTotpCode] = useState('')
   const [partialToken, setPartialToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [checkingSetup, setCheckingSetup] = useState(true)
   const navigate = useNavigate()
-  const { login, loginTotp } = useAuthStore()
+  const { login, loginTotp, isAuthenticated } = useAuthStore()
+  useEffect(() => {
+    if (isAuthenticated) { navigate('/'); return }
+    api.get<{ setup_complete: boolean }>('/auth/setup-status').then((res) => {
+      if (!res.setup_complete) navigate('/setup', { replace: true })
+      else setCheckingSetup(false)
+    }).catch(() => setCheckingSetup(false))
+  }, [navigate, isAuthenticated])
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -45,6 +54,7 @@ export function LoginPage() {
       setLoading(false)
     }
   }
+  if (checkingSetup) return <div className="flex items-center justify-center min-h-screen bg-[var(--surface-0)]"><p className="text-muted-foreground">Loading...</p></div>
   return (
     <div className="flex items-center justify-center min-h-screen bg-[var(--surface-0)] p-4">
       <Card className="w-full max-w-sm bg-[var(--surface-1)] border-border">
