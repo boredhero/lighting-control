@@ -8,6 +8,7 @@ from argon2.exceptions import VerifyMismatchError
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from lighting_control.auth.models import APIKey, InviteCode, Session, SystemConfig, TOTPSecret, User
 from lighting_control.config import settings
 
@@ -73,7 +74,7 @@ async def create_user(db: AsyncSession, username: str, password: str, is_admin: 
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(select(User).options(selectinload(User.passkeys)).where(User.username == username))
     return result.scalar_one_or_none()
 
 
