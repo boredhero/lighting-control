@@ -169,3 +169,31 @@ async def create_api_key(req: schemas.APIKeyCreateRequest, user: User = Depends(
     api_key, raw_key = await service.create_api_key(db, user.id, req.name, req.permissions)
     await db.commit()
     return schemas.APIKeyCreateResponse(id=api_key.id, name=api_key.name, raw_key=raw_key, created_at=api_key.created_at)
+
+
+@router.get("/users", response_model=list[schemas.UserResponse])
+async def list_users(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    users = await service.get_all_users(db)
+    return users
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
+    if not await service.delete_user(db, user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await db.commit()
+
+
+@router.get("/me/passkeys", response_model=list[schemas.PasskeyResponse])
+async def list_passkeys(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    passkeys = await service.get_user_passkeys(db, user.id)
+    return passkeys
+
+
+@router.delete("/me/passkeys/{passkey_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_passkey(passkey_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    if not await service.delete_passkey(db, passkey_id, user.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Passkey not found")
+    await db.commit()
