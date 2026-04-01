@@ -1,0 +1,54 @@
+"""WiZ device discovery via pywizlight UDP broadcast."""
+import asyncio
+import logging
+from pywizlight import discovery, wizlight
+from sqlalchemy.ext.asyncio import AsyncSession
+from lighting_control.db.engine import async_session
+from lighting_control.devices.service import upsert_device
+
+logger = logging.getLogger(__name__)
+
+
+async def discover_devices() -> list[dict]:
+    """Discover WiZ devices on the LAN via UDP broadcast.
+    Returns list of discovered device info dicts.
+    """
+    discovered = []
+    try:
+        bulbs = await discovery.discover_lights()
+        for bulb in bulbs:
+            try:
+                await bulb.updateState()
+                sys_config = await bulb.getSystemConfig() if hasattr(bulb, 'getSystemConfig') else None
+                info = {"mac": bulb.mac, "ip": bulb.ip, "model": getattr(sys_config, 'moduleName', None) if sys_config else None, "module_name": getattr(bulb, 'modelconfig', None) and getattr(bulb.modelconfig, 'module_name', None), "bulb_type": str(bulb.bulbtype) if hasattr(bulb, 'bulbtype') else None, "firmware_version": getattr(sys_config, 'fwVersion', None) if sys_config else None, "state": bulb.state.pilotResult if bulb.state else None}
+                discovered.append(info)
+            except Exception as e:
+                logger.warning(f"Failed to query bulb at {bulb.ip}: {e}")
+    except Exception as e:
+        logger.error(f"Discovery failed: {e}")
+    return discovered
+
+
+async def run_discovery_and_persist() -> int:
+    """Run discovery and upsert results into the database. Returns count of devices found."""
+    devices = await discover_devices()
+    async with async_session() as db:
+        for info in devices:
+            await upsert_device(db, mac=info["mac"], ip=info["ip"], model=info.get("model"), module_name=info.get("module_name"), bulb_type=info.get("bulb_type"), firmware_version=info.get("firmware_version"))
+        await db.commit()
+    logger.info(f"Discovery complete: {len(devices)} devices found")
+    return len(devices)
+
+
+async def control_device(ip: str, state: dict) -> dict | None:
+    """Send a setPilot command to a device. Returns the pilot result or None on failure."""
+    try:
+        bulb = wizlight(ip)
+        from pywizlight import PilotBuilder
+        pilot = PilotBuilder(**state)
+        await bulb.turn_on(pilot)
+        await bulb.updateState()
+        return bulb.state.pilotResult if bulb.state else None
+    except Exception as e:
+        logger.error(f"Failed to control device at {ip}: {e}")
+        return None
