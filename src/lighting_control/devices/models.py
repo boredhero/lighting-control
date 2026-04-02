@@ -14,15 +14,18 @@ class Room(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     devices: Mapped[list["Device"]] = relationship("Device", back_populates="room")
+    zones: Mapped[list["Zone"]] = relationship("Zone", back_populates="room", cascade="all, delete-orphan")
 
 
 class Zone(Base):
     __tablename__ = "zones"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    room_id: Mapped[str] = mapped_column(String(36), ForeignKey("rooms.id"), nullable=False)
     icon: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    room: Mapped["Room"] = relationship("Room", back_populates="zones")
     devices: Mapped[list["Device"]] = relationship("Device", back_populates="zone")
 
 
