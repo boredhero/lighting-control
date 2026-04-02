@@ -57,6 +57,14 @@ class InviteCreateResponse(BaseModel):
     expires_at: datetime | None
 
 
+class InviteListResponse(BaseModel):
+    id: str
+    code: str
+    created_at: datetime
+    expires_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=8, max_length=255)

@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
-import { Lightbulb, Power } from 'lucide-react'
+import { Lightbulb, Power, Pencil, Check, X } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { HexColorPicker } from 'react-colorful'
+import { formatMac } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
 
@@ -18,7 +20,10 @@ export function DeviceDetailPage() {
   const { data: device } = useQuery<Device>({ queryKey: ['device', id], queryFn: () => api.get(`/devices/${id}`) })
   const [color, setColor] = useState('#F59E0B')
   const [brightness, setBrightness] = useState(100)
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState('')
   const controlMutation = useMutation({ mutationFn: (state: Record<string, unknown>) => api.post(`/devices/${id}/control`, { state }), onSuccess: () => { toast.success('Device updated'); queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const renameMutation = useMutation({ mutationFn: (name: string) => api.post(`/devices/${id}/rename`, { name }), onSuccess: () => { toast.success('Device renamed'); queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }); setEditing(false) }, onError: (err: Error) => toast.error(err.message) })
   useEffect(() => {
     if (device?.last_state) {
       const s = device.last_state
@@ -35,7 +40,18 @@ export function DeviceDetailPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`rounded-full p-3 ${device.is_online ? 'bg-[var(--color-amber)]/20 text-[var(--color-amber)]' : 'bg-muted text-muted-foreground'}`}><Lightbulb size={28} /></div>
-          <div><h2 className="text-2xl font-bold">{device.name}</h2><p className="text-muted-foreground">{device.ip}</p></div>
+          <div>
+            {editing ? (
+              <div className="flex items-center gap-2">
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="text-lg font-bold h-9 w-48" autoFocus onKeyDown={(e) => { if (e.key === 'Enter' && editName.trim()) renameMutation.mutate(editName.trim()); if (e.key === 'Escape') setEditing(false) }} />
+                <Button variant="ghost" size="icon" onClick={() => { if (editName.trim()) renameMutation.mutate(editName.trim()) }} disabled={!editName.trim() || renameMutation.isPending}><Check size={16} /></Button>
+                <Button variant="ghost" size="icon" onClick={() => setEditing(false)}><X size={16} /></Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2"><h2 className="text-2xl font-bold">{device.name}</h2><Button variant="ghost" size="icon" onClick={() => { setEditName(device.name); setEditing(true) }}><Pencil size={14} /></Button></div>
+            )}
+            <p className="text-muted-foreground">{device.ip}</p>
+          </div>
         </div>
         <Button variant="outline" size="icon" onClick={handleToggle}><Power size={20} /></Button>
       </div>
@@ -57,7 +73,7 @@ export function DeviceDetailPage() {
       <Card className="bg-[var(--surface-1)] border-border">
         <CardHeader><CardTitle>Device Info</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-2 text-sm">
-          <span className="text-muted-foreground">MAC</span><span>{device.mac}</span>
+          <span className="text-muted-foreground">MAC</span><span className="font-mono">{formatMac(device.mac)}</span>
           <span className="text-muted-foreground">Model</span><span>{device.model || 'Unknown'}</span>
           <span className="text-muted-foreground">Type</span><span>{device.bulb_type || 'Unknown'}</span>
           <span className="text-muted-foreground">Firmware</span><span>{device.firmware_version || 'Unknown'}</span>

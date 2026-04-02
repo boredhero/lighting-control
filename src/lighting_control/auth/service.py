@@ -122,6 +122,21 @@ async def get_invite(db: AsyncSession, code: str) -> InviteCode | None:
     return invite
 
 
+async def get_active_invites(db: AsyncSession) -> list[InviteCode]:
+    result = await db.execute(select(InviteCode).where(InviteCode.used == False).order_by(InviteCode.created_at.desc()))
+    return list(result.scalars().all())
+
+
+async def revoke_invite(db: AsyncSession, invite_id: str) -> bool:
+    result = await db.execute(select(InviteCode).where(InviteCode.id == invite_id, InviteCode.used == False))
+    invite = result.scalar_one_or_none()
+    if not invite:
+        return False
+    await db.delete(invite)
+    await db.flush()
+    return True
+
+
 async def use_invite(db: AsyncSession, invite: InviteCode, used_by: str) -> None:
     invite.used = True
     invite.used_by = used_by
