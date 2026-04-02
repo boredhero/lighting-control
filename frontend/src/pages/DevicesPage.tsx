@@ -11,6 +11,32 @@ import { toast } from 'sonner'
 
 interface Device { id: string; name: string; mac: string; ip: string; is_online: boolean; bulb_type: string | null; room_id: string | null; last_state: Record<string, unknown> | null }
 
+function getDeviceColor(device: Device): string {
+  if (!device.is_online || !device.last_state || device.last_state.state === false) return '#666666'
+  const s = device.last_state
+  if (typeof s.r === 'number' && typeof s.g === 'number' && typeof s.b === 'number') {
+    const r = Math.min(255, Math.max(0, s.r as number))
+    const g = Math.min(255, Math.max(0, s.g as number))
+    const b = Math.min(255, Math.max(0, s.b as number))
+    if (r === 0 && g === 0 && b === 0) return '#FFD700'
+    return `rgb(${r}, ${g}, ${b})`
+  }
+  if (typeof s.temp === 'number') {
+    const temp = s.temp as number
+    if (temp <= 2700) return '#FFB347'
+    if (temp <= 4000) return '#FFE4B5'
+    if (temp <= 5000) return '#FFFAF0'
+    return '#E8F0FF'
+  }
+  return '#FFD700'
+}
+
+function getDeviceBrightness(device: Device): number | null {
+  if (!device.is_online || !device.last_state || device.last_state.state === false) return null
+  if (typeof device.last_state.dimming === 'number') return device.last_state.dimming as number
+  return null
+}
+
 export function DevicesPage() {
   const [search, setSearch] = useState('')
   const queryClient = useQueryClient()
@@ -36,20 +62,25 @@ export function DevicesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {filtered.map((device) => (
-            <Link key={device.id} to={`/devices/${device.id}`}>
-              <Card className="bg-[var(--surface-1)] border-border hover:bg-[var(--surface-2)] transition-colors cursor-pointer">
-                <CardContent className="flex items-center gap-3 p-4">
-                  <div className={`rounded-full p-2 ${device.is_online ? 'bg-[var(--color-amber)]/20 text-[var(--color-amber)]' : 'bg-muted text-muted-foreground'}`}><Lightbulb size={20} /></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{device.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{device.ip}</p>
-                  </div>
-                  <Badge variant={device.is_online ? 'default' : 'secondary'}>{device.is_online ? 'Online' : 'Offline'}</Badge>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+          {filtered.map((device) => {
+            const color = getDeviceColor(device)
+            const brightness = getDeviceBrightness(device)
+            const isOff = !device.is_online || device.last_state?.state === false
+            return (
+              <Link key={device.id} to={`/devices/${device.id}`}>
+                <Card className="bg-[var(--surface-1)] border-border hover:bg-[var(--surface-2)] transition-colors cursor-pointer" style={!isOff ? { borderLeft: `3px solid ${color}` } : undefined}>
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <div className="rounded-full p-2" style={{ backgroundColor: isOff ? 'var(--surface-3)' : `${color}20`, color: isOff ? 'var(--text-disabled)' : color }}><Lightbulb size={20} /></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{device.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{device.ip}{brightness !== null ? ` · ${brightness}%` : ''}</p>
+                    </div>
+                    <Badge variant={device.is_online ? (isOff ? 'secondary' : 'default') : 'secondary'} style={!isOff ? { backgroundColor: `${color}30`, color: color, borderColor: `${color}50` } : undefined}>{isOff ? 'Off' : 'Online'}</Badge>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>
