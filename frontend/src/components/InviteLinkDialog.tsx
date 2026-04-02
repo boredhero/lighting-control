@@ -47,7 +47,7 @@ export function InviteLinkDialog({ open, onOpenChange }: Props) {
             <p className="text-sm text-muted-foreground">Generate a single-use invite link. The recipient will create an account with the role you choose.</p>
             <div className="flex flex-col gap-2">
               <Label>Role</Label>
-              <Select value={roleId} onValueChange={setRoleId}>
+              <Select value={roleId} onValueChange={(v) => { if (v) setRoleId(v) }}>
                 <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                 <SelectContent>{roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
               </Select>
