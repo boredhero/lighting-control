@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '@/api/client'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Lightbulb, Radar } from 'lucide-react'
@@ -75,7 +74,7 @@ export function DevicesPage() {
                       <p className="font-medium truncate">{device.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{device.ip}{brightness !== null ? ` · ${brightness}%` : ''}</p>
                     </div>
-                    <Badge variant={device.is_online ? (isOff ? 'secondary' : 'default') : 'secondary'} style={!isOff ? { backgroundColor: `${color}30`, color: color, borderColor: `${color}50` } : undefined}>{isOff ? 'Off' : 'Online'}</Badge>
+                    <span className="inline-flex h-5 items-center rounded-full px-2 text-xs font-medium" style={!isOff ? { backgroundColor: `${color}25`, color: color, border: `1px solid ${color}40` } : { backgroundColor: 'var(--surface-3)', color: 'var(--text-disabled)' }}>{isOff ? 'Off' : 'Online'}</span>
                   </CardContent>
                 </Card>
               </Link>
