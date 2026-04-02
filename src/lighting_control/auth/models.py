@@ -2,9 +2,22 @@
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, JSON, LargeBinary, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, JSON, LargeBinary, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from lighting_control.db.base import Base
+
+
+class Role(Base):
+    __tablename__ = "roles"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_guest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    permissions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    users: Mapped[list["User"]] = relationship("User", back_populates="role")
 
 
 class User(Base):
@@ -12,6 +25,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("roles.id"), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_guest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     guest_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -19,6 +33,7 @@ class User(Base):
     permissions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    role: Mapped["Role | None"] = relationship("Role", back_populates="users")
     totp_secret: Mapped["TOTPSecret | None"] = relationship("TOTPSecret", back_populates="user", uselist=False, cascade="all, delete-orphan")
     passkeys: Mapped[list["Passkey"]] = relationship("Passkey", back_populates="user", cascade="all, delete-orphan")
     sessions: Mapped[list["Session"]] = relationship("Session", back_populates="user", cascade="all, delete-orphan")
@@ -83,7 +98,6 @@ class InviteCode(Base):
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    role: Mapped[str] = mapped_column(String(16), default="user", nullable=False)
-    permissions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    role_id: Mapped[str] = mapped_column(String(36), ForeignKey("roles.id"), nullable=False)
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     used_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)

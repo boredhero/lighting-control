@@ -54,10 +54,18 @@ async def control_device(ip: str, state: dict) -> dict | None:
     """Send a setPilot command to a device. Returns the pilot result or None on failure."""
     try:
         bulb = wizlight(ip)
+        turn_off = state.pop("turn_off", False)
+        if turn_off:
+            await bulb.turn_off()
+            await bulb.updateState()
+            return bulb.state.pilotResult if bulb.state else {"state": False}
+        logger.info(f"Sending setPilot to {ip}: {state}")
         pilot = PilotBuilder(**state)
         await bulb.turn_on(pilot)
         await bulb.updateState()
-        return bulb.state.pilotResult if bulb.state else None
+        result = bulb.state.pilotResult if bulb.state else None
+        logger.info(f"Device {ip} responded: {result}")
+        return result
     except Exception as e:
-        logger.error(f"Failed to control device at {ip}: {e}")
+        logger.error(f"Failed to control device at {ip}: {e}", exc_info=True)
         return None

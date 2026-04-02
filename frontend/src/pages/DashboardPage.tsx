@@ -11,7 +11,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient()
   const { data: devices = [] } = useQuery<Device[]>({ queryKey: ['devices'], queryFn: () => api.get('/devices') })
   const { data: quickActions = [] } = useQuery<QuickAction[]>({ queryKey: ['quick-actions'], queryFn: () => api.get('/quick-actions') })
-  const executeMutation = useMutation({ mutationFn: (id: string) => api.post(`/quick-actions/${id}/execute`), onSuccess: () => { toast.success('Quick action executed'); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const executeMutation = useMutation({ mutationFn: (id: string) => api.post<{ results: Record<string, boolean> }>(`/quick-actions/${id}/execute`), onSuccess: (data) => { const d = data as { results: Record<string, boolean> }; const failed = Object.values(d.results).filter((v) => !v).length; if (failed > 0) { toast.error(`${failed} device(s) did not respond`) } else { toast.success('Quick action executed') }; queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
   const onlineCount = devices.filter((d) => d.is_online).length
   return (
     <div className="space-y-6">
