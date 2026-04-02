@@ -23,7 +23,8 @@ async def setup_status(db: AsyncSession = Depends(get_session)):
 async def setup(req: schemas.SetupRequest, db: AsyncSession = Depends(get_session)):
     if await service.is_setup_complete(db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Setup already complete")
-    user = await service.create_user(db, req.username, req.password, is_admin=True)
+    admin_role = await service.get_admin_role(db)
+    user = await service.create_user(db, req.username, req.password, role_id=admin_role.id if admin_role else None, is_admin=True)
     await service.mark_setup_complete(db)
     await db.commit()
     return user
@@ -98,14 +99,82 @@ async def logout(user: User = Depends(get_current_user), db: AsyncSession = Depe
     await db.commit()
 
 
-@router.post("/guests", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_guest(req: schemas.GuestCreateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+# --- Roles ---
+
+
+@router.get("/roles", response_model=list[schemas.RoleResponse])
+async def list_roles(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    return await service.get_all_roles(db)
+
+
+@router.post("/roles", response_model=schemas.RoleResponse, status_code=status.HTTP_201_CREATED)
+async def create_role(req: schemas.RoleCreateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    role = await service.create_role(db, req.name, is_admin=req.is_admin, is_guest=req.is_guest, permissions=req.permissions)
+    await db.commit()
+    return role
+
+
+@router.put("/roles/{role_id}", response_model=schemas.RoleResponse)
+async def update_role(role_id: str, req: schemas.RoleUpdateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    role = await service.get_role(db, role_id)
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    if role.is_system:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot modify system roles")
+    updated = await service.update_role(db, role_id, req.name, req.is_admin, req.is_guest, req.permissions)
+    await db.commit()
+    return updated
+
+
+@router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_role(role_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    if not await service.delete_role(db, role_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete system role or role with assigned users")
+    await db.commit()
+
+
+# --- Users ---
+
+
+@router.post("/users", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(req: schemas.GuestCreateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
     existing = await service.get_user_by_username(db, req.username)
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username taken")
-    guest = await service.create_user(db, req.username, req.password, is_guest=True, guest_expires_at=req.expires_at, permissions=req.permissions, created_by=admin.id)
+    role = await service.get_role(db, req.role_id)
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    user = await service.create_user(db, req.username, req.password, role_id=req.role_id, guest_expires_at=req.expires_at, created_by=admin.id)
     await db.commit()
-    return guest
+    return user
+
+
+@router.get("/users", response_model=list[schemas.UserResponse])
+async def list_users(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    return await service.get_all_users(db)
+
+
+@router.put("/users/{user_id}", response_model=schemas.UserResponse)
+async def update_user(user_id: str, req: schemas.UserUpdateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot modify your own role")
+    user = await service.update_user(db, user_id, req.role_id, req.guest_expires_at)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or role not found")
+    await db.commit()
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
+    if not await service.delete_user(db, user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await db.commit()
+
+
+# --- Invites ---
 
 
 @router.get("/invites", response_model=list[schemas.InviteListResponse])
@@ -115,10 +184,13 @@ async def list_invites(admin: User = Depends(require_admin), db: AsyncSession = 
 
 @router.post("/invites", response_model=schemas.InviteCreateResponse)
 async def create_invite(req: schemas.InviteCreateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
-    invite = await service.create_invite(db, admin.id, expires_at=req.expires_at, role=req.role, permissions=req.permissions)
+    role = await service.get_role(db, req.role_id)
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    invite = await service.create_invite(db, admin.id, role_id=req.role_id, expires_at=req.expires_at)
     await db.commit()
     url = f"{settings.WEBAUTHN_ORIGIN}/register?code={invite.code}"
-    return schemas.InviteCreateResponse(code=invite.code, url=url, expires_at=invite.expires_at, role=invite.role, permissions=invite.permissions)
+    return schemas.InviteCreateResponse(code=invite.code, url=url, expires_at=invite.expires_at, role_id=invite.role_id)
 
 
 @router.delete("/invites/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -136,10 +208,13 @@ async def register(req: schemas.RegisterRequest, db: AsyncSession = Depends(get_
     existing = await service.get_user_by_username(db, req.username)
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username taken")
-    user = await service.create_user(db, req.username, req.password, is_admin=(invite.role == "admin"), permissions=invite.permissions)
+    user = await service.create_user(db, req.username, req.password, role_id=invite.role_id)
     await service.use_invite(db, invite, user.id)
     await db.commit()
     return user
+
+
+# --- Me ---
 
 
 @router.get("/me", response_model=schemas.UserResponse)
@@ -200,32 +275,6 @@ async def debug_totp(req: schemas.TOTPEnableRequest, user: User = Depends(get_cu
     import pyotp
     t = pyotp.TOTP(req.secret)
     return {"your_code": req.code, "server_code": t.now(), "secret_preview": req.secret[:8] + "...", "match": t.verify(req.code, valid_window=2)}
-
-
-@router.get("/users", response_model=list[schemas.UserResponse])
-async def list_users(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
-    users = await service.get_all_users(db)
-    return users
-
-
-@router.put("/users/{user_id}", response_model=schemas.UserResponse)
-async def update_user(user_id: str, req: schemas.UserUpdateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
-    if user_id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot modify your own role")
-    user = await service.update_user(db, user_id, req.role, req.permissions, req.guest_expires_at)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    await db.commit()
-    return user
-
-
-@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
-    if user_id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself")
-    if not await service.delete_user(db, user_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    await db.commit()
 
 
 @router.get("/me/passkeys", response_model=list[schemas.PasskeyResponse])
