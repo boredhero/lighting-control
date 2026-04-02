@@ -51,6 +51,30 @@ async def bulk_control(req: schemas.BulkControlRequest, user: User = Depends(req
     return {"results": results}
 
 
+@router.get("/export", response_model=list[dict])
+async def export_devices(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Export all device MAC→name mappings as JSON for backup/restore."""
+    devices = await service.get_all_devices(db)
+    return [{"mac": d.mac, "name": d.name} for d in devices]
+
+
+@router.post("/import", response_model=dict)
+async def import_devices(mappings: list[dict], user: User = Depends(require_permission("can_manage_devices")), db: AsyncSession = Depends(get_session)):
+    """Restore device names from a previously exported MAC→name list."""
+    updated = 0
+    for mapping in mappings:
+        mac = mapping.get("mac")
+        name = mapping.get("name")
+        if not mac or not name:
+            continue
+        device = await service.get_device_by_mac(db, mac)
+        if device:
+            device.name = name
+            updated += 1
+    await db.commit()
+    return {"updated": updated, "total": len(mappings)}
+
+
 @router.get("/hierarchy", response_model=dict)
 async def get_hierarchy(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Full nested hierarchy: rooms → zones → devices, plus unassigned and groups."""
