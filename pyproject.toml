@@ -1,6 +1,6 @@
 [project]
 name = "lighting-control"
-version = "0.1.0"
+version = "__LIGHTING_VERSION__"
 description = "Smart home lighting control web app for WiZ devices"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }

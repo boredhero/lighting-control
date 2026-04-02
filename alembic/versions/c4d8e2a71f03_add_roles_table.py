@@ -42,12 +42,14 @@ def upgrade() -> None:
     op.execute(f"INSERT INTO roles (id, name, is_system, is_admin, is_guest, permissions, sort_order) VALUES ('{USER_ROLE_ID}', 'User', 1, 0, 0, '{USER_PERMS}', 1)")
     op.execute(f"INSERT INTO roles (id, name, is_system, is_admin, is_guest, permissions, sort_order) VALUES ('{GUEST_ROLE_ID}', 'Guest', 1, 0, 1, '{GUEST_PERMS}', 2)")
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('role_id', sa.String(36), sa.ForeignKey('roles.id'), nullable=True))
+        batch_op.add_column(sa.Column('role_id', sa.String(36), nullable=True))
+        batch_op.create_foreign_key('fk_users_role_id', 'roles', ['role_id'], ['id'])
     op.execute(f"UPDATE users SET role_id = '{ADMIN_ROLE_ID}' WHERE is_admin = 1")
     op.execute(f"UPDATE users SET role_id = '{GUEST_ROLE_ID}' WHERE is_guest = 1")
     op.execute(f"UPDATE users SET role_id = '{USER_ROLE_ID}' WHERE role_id IS NULL")
     with op.batch_alter_table('invite_codes', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('role_id', sa.String(36), sa.ForeignKey('roles.id'), nullable=True))
+        batch_op.add_column(sa.Column('role_id', sa.String(36), nullable=True))
+        batch_op.create_foreign_key('fk_invite_codes_role_id', 'roles', ['role_id'], ['id'])
     op.execute(f"UPDATE invite_codes SET role_id = '{ADMIN_ROLE_ID}' WHERE role = 'admin'")
     op.execute(f"UPDATE invite_codes SET role_id = '{USER_ROLE_ID}' WHERE role_id IS NULL")
     with op.batch_alter_table('invite_codes', schema=None) as batch_op:
