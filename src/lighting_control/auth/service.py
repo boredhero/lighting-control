@@ -9,7 +9,7 @@ from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from lighting_control.auth.models import APIKey, InviteCode, Session, SystemConfig, TOTPSecret, User
+from lighting_control.auth.models import APIKey, InviteCode, Role, Session, SystemConfig, TOTPSecret, User
 from lighting_control.config import settings
 
 ph = PasswordHasher()
@@ -66,8 +66,77 @@ async def mark_setup_complete(db: AsyncSession) -> None:
     await db.flush()
 
 
-async def create_user(db: AsyncSession, username: str, password: str, is_admin: bool = False, is_guest: bool = False, guest_expires_at: datetime | None = None, permissions: dict | None = None, created_by: str | None = None) -> User:
+# --- Roles ---
+
+
+async def get_all_roles(db: AsyncSession) -> list[Role]:
+    result = await db.execute(select(Role).order_by(Role.sort_order, Role.created_at))
+    return list(result.scalars().all())
+
+
+async def get_role(db: AsyncSession, role_id: str) -> Role | None:
+    result = await db.execute(select(Role).where(Role.id == role_id))
+    return result.scalar_one_or_none()
+
+
+async def get_admin_role(db: AsyncSession) -> Role | None:
+    result = await db.execute(select(Role).where(Role.is_system == True, Role.is_admin == True))
+    return result.scalar_one_or_none()
+
+
+async def create_role(db: AsyncSession, name: str, is_admin: bool = False, is_guest: bool = False, permissions: dict | None = None) -> Role:
+    role = Role(name=name, is_admin=is_admin, is_guest=is_guest, permissions=permissions or DEFAULT_PERMISSIONS)
+    db.add(role)
+    await db.flush()
+    return role
+
+
+async def update_role(db: AsyncSession, role_id: str, name: str, is_admin: bool, is_guest: bool, permissions: dict) -> Role | None:
+    role = await get_role(db, role_id)
+    if not role:
+        return None
+    role.name = name
+    role.is_admin = is_admin
+    role.is_guest = is_guest
+    role.permissions = permissions
+    await db.flush()
+    result = await db.execute(select(User).where(User.role_id == role_id))
+    for user in result.scalars().all():
+        user.is_admin = role.is_admin
+        user.is_guest = role.is_guest
+        user.permissions = role.permissions
+    await db.flush()
+    return role
+
+
+async def delete_role(db: AsyncSession, role_id: str) -> bool:
+    role = await get_role(db, role_id)
+    if not role or role.is_system:
+        return False
+    result = await db.execute(select(User).where(User.role_id == role_id))
+    if result.scalars().first():
+        return False
+    await db.delete(role)
+    await db.flush()
+    return True
+
+
+# --- Users ---
+
+
+def _sync_user_from_role(user: User, role: Role) -> None:
+    user.role_id = role.id
+    user.is_admin = role.is_admin
+    user.is_guest = role.is_guest
+    user.permissions = role.permissions
+
+
+async def create_user(db: AsyncSession, username: str, password: str, role_id: str | None = None, is_admin: bool = False, is_guest: bool = False, guest_expires_at: datetime | None = None, permissions: dict | None = None, created_by: str | None = None) -> User:
     user = User(username=username, password_hash=hash_password(password), is_admin=is_admin, is_guest=is_guest, guest_expires_at=guest_expires_at, permissions=permissions or DEFAULT_PERMISSIONS, created_by=created_by)
+    if role_id:
+        role = await get_role(db, role_id)
+        if role:
+            _sync_user_from_role(user, role)
     db.add(user)
     await db.flush()
     return user
@@ -106,9 +175,39 @@ async def revoke_user_sessions(db: AsyncSession, user_id: str) -> None:
     await db.flush()
 
 
-async def create_invite(db: AsyncSession, created_by: str, expires_at: datetime | None = None, role: str = "user", permissions: dict | None = None) -> InviteCode:
+async def update_user(db: AsyncSession, user_id: str, role_id: str, guest_expires_at: datetime | None = None) -> User | None:
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        return None
+    role = await get_role(db, role_id)
+    if not role:
+        return None
+    _sync_user_from_role(user, role)
+    user.guest_expires_at = guest_expires_at if role.is_guest else None
+    await db.flush()
+    return user
+
+
+async def delete_user(db: AsyncSession, user_id: str) -> bool:
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        return False
+    await db.delete(user)
+    await db.flush()
+    return True
+
+
+async def get_all_users(db: AsyncSession) -> list[User]:
+    result = await db.execute(select(User).order_by(User.created_at))
+    return list(result.scalars().all())
+
+
+# --- Invites ---
+
+
+async def create_invite(db: AsyncSession, created_by: str, role_id: str, expires_at: datetime | None = None) -> InviteCode:
     code = secrets.token_urlsafe(32)
-    invite = InviteCode(code=code, created_by=created_by, expires_at=expires_at, role=role, permissions=permissions or DEFAULT_PERMISSIONS)
+    invite = InviteCode(code=code, created_by=created_by, expires_at=expires_at, role_id=role_id)
     db.add(invite)
     await db.flush()
     return invite
@@ -143,6 +242,9 @@ async def use_invite(db: AsyncSession, invite: InviteCode, used_by: str) -> None
     await db.flush()
 
 
+# --- API Keys ---
+
+
 async def create_api_key(db: AsyncSession, user_id: str, name: str, permissions: dict) -> tuple[APIKey, str]:
     raw_key = secrets.token_urlsafe(48)
     api_key = APIKey(user_id=user_id, key_hash=hash_token(raw_key), name=name, permissions=permissions)
@@ -156,30 +258,7 @@ async def get_api_key_by_hash(db: AsyncSession, key_hash: str) -> APIKey | None:
     return result.scalar_one_or_none()
 
 
-async def get_all_users(db: AsyncSession) -> list[User]:
-    result = await db.execute(select(User).order_by(User.created_at))
-    return list(result.scalars().all())
-
-
-async def update_user(db: AsyncSession, user_id: str, role: str, permissions: dict, guest_expires_at: datetime | None = None) -> User | None:
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        return None
-    user.is_admin = (role == "admin")
-    user.is_guest = (role == "guest")
-    user.permissions = permissions
-    user.guest_expires_at = guest_expires_at if role == "guest" else None
-    await db.flush()
-    return user
-
-
-async def delete_user(db: AsyncSession, user_id: str) -> bool:
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        return False
-    await db.delete(user)
-    await db.flush()
-    return True
+# --- Passkeys ---
 
 
 async def get_user_passkeys(db: AsyncSession, user_id: str) -> list:

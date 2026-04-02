@@ -40,32 +40,55 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class RoleCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    is_admin: bool = False
+    is_guest: bool = False
+    permissions: dict = Field(default_factory=lambda: {"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": False, "can_view_schedules": True, "can_manage_schedules": False, "can_manage_devices": False, "can_manage_users": False})
+
+
+class RoleUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    is_admin: bool = False
+    is_guest: bool = False
+    permissions: dict = Field(default_factory=dict)
+
+
+class RoleResponse(BaseModel):
+    id: str
+    name: str
+    is_system: bool
+    is_admin: bool
+    is_guest: bool
+    permissions: dict
+    sort_order: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GuestCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=8, max_length=255)
+    role_id: str
     expires_at: datetime | None = None
-    permissions: dict = Field(default_factory=lambda: {"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": False, "can_view_schedules": True, "can_manage_schedules": False, "can_manage_devices": False, "can_manage_users": False})
 
 
 class InviteCreateRequest(BaseModel):
     expires_at: datetime | None = None
-    role: str = Field(default="user", pattern="^(admin|user)$")
-    permissions: dict = Field(default_factory=lambda: {"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": False, "can_view_schedules": True, "can_manage_schedules": False, "can_manage_devices": False, "can_manage_users": False})
+    role_id: str
 
 
 class InviteCreateResponse(BaseModel):
     code: str
     url: str
     expires_at: datetime | None
-    role: str
-    permissions: dict
+    role_id: str
 
 
 class InviteListResponse(BaseModel):
     id: str
     code: str
-    role: str
-    permissions: dict
+    role_id: str
     created_at: datetime
     expires_at: datetime | None
     model_config = ConfigDict(from_attributes=True)
@@ -80,14 +103,19 @@ class RegisterRequest(BaseModel):
 class UserResponse(BaseModel):
     id: str
     username: str
+    role_id: str | None
     is_admin: bool
     is_guest: bool
     guest_expires_at: datetime | None
     totp_enabled: bool
     permissions: dict
     created_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserUpdateRequest(BaseModel):
+    role_id: str
+    guest_expires_at: datetime | None = None
 
 
 class TOTPSetupResponse(BaseModel):
@@ -106,12 +134,6 @@ class APIKeyCreateResponse(BaseModel):
     name: str
     raw_key: str
     created_at: datetime
-
-
-class UserUpdateRequest(BaseModel):
-    role: str = Field(pattern="^(admin|user|guest)$")
-    permissions: dict = Field(default_factory=dict)
-    guest_expires_at: datetime | None = None
 
 
 class ChangePasswordRequest(BaseModel):
