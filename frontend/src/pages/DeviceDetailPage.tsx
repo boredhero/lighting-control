@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
-import { Lightbulb, Power, Pencil, Check, X } from 'lucide-react'
+import { Lightbulb, Power, Pencil, Check, X, Thermometer, Palette } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { HexColorPicker } from 'react-colorful'
 import { formatMac } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -14,35 +15,52 @@ import { useState, useEffect, useRef } from 'react'
 
 interface Device { id: string; name: string; mac: string; ip: string; model: string | null; bulb_type: string | null; firmware_version: string | null; is_online: boolean; last_state: Record<string, unknown> | null; room_id: string | null; zone_id: string | null }
 
+function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map((c) => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('')
+}
+
+function tempToLabel(temp: number): string {
+  if (temp <= 2700) return 'Warm White'
+  if (temp <= 4000) return 'Neutral'
+  if (temp <= 5000) return 'Cool White'
+  return 'Daylight'
+}
+
 export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const { data: device } = useQuery<Device>({ queryKey: ['device', id], queryFn: () => api.get(`/devices/${id}`) })
   const [color, setColor] = useState('#F59E0B')
   const [brightness, setBrightness] = useState(100)
+  const [colorTemp, setColorTemp] = useState(4000)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const brightnessTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const controlMutation = useMutation({ mutationFn: (state: Record<string, unknown>) => api.post<{ success: boolean }>(`/devices/${id}/control`, { state }), onSuccess: (data) => { const d = data as { success: boolean }; if (d.success) { toast.success('Device updated') } else { toast.error('Device did not respond') }; queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const tempTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const controlMutation = useMutation({ mutationFn: (state: Record<string, unknown>) => api.post<{ success: boolean }>(`/devices/${id}/control`, { state }), onSuccess: (data) => { const d = data as { success: boolean }; if (!d.success) { toast.error('Device did not respond') }; queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
   const renameMutation = useMutation({ mutationFn: (name: string) => api.post(`/devices/${id}/rename`, { name }), onSuccess: () => { toast.success('Device renamed'); queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }); setEditing(false) }, onError: (err: Error) => toast.error(err.message) })
   useEffect(() => {
     if (device?.last_state) {
       const s = device.last_state
-      if (s.dimming) setBrightness(s.dimming as number)
+      if (typeof s.dimming === 'number') setBrightness(s.dimming as number)
+      if (typeof s.r === 'number' && typeof s.g === 'number' && typeof s.b === 'number') setColor(rgbToHex(s.r as number, s.g as number, s.b as number))
+      if (typeof s.temp === 'number') setColorTemp(s.temp as number)
     }
   }, [device])
   if (!device) return <p className="text-muted-foreground">Loading...</p>
   const hexToRgb = (hex: string) => { const r = parseInt(hex.slice(1, 3), 16); const g = parseInt(hex.slice(3, 5), 16); const b = parseInt(hex.slice(5, 7), 16); return { r, g, b } }
   const handleColorChange = (hex: string) => { setColor(hex); if (colorTimer.current) clearTimeout(colorTimer.current); colorTimer.current = setTimeout(() => { const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }, 300) }
   const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); if (brightnessTimer.current) clearTimeout(brightnessTimer.current); brightnessTimer.current = setTimeout(() => { controlMutation.mutate({ dimming: v }) }, 300) }
+  const handleColorTemp = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setColorTemp(v); if (tempTimer.current) clearTimeout(tempTimer.current); tempTimer.current = setTimeout(() => { controlMutation.mutate({ temp: v, dimming: brightness }) }, 300) }
   const isOn = device.last_state?.state !== false
   const handleToggle = () => { controlMutation.mutate(isOn ? { turn_off: true } : { dimming: brightness }) }
+  const deviceColor = device.last_state && typeof device.last_state.r === 'number' ? rgbToHex(device.last_state.r as number, device.last_state.g as number, device.last_state.b as number) : null
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`rounded-full p-3 ${device.is_online ? 'bg-[var(--color-amber)]/20 text-[var(--color-amber)]' : 'bg-muted text-muted-foreground'}`}><Lightbulb size={28} /></div>
+          <div className="rounded-full p-3" style={{ backgroundColor: isOn && deviceColor ? `${deviceColor}30` : 'var(--surface-3)', color: isOn && deviceColor ? deviceColor : 'var(--text-disabled)' }}><Lightbulb size={28} /></div>
           <div>
             {editing ? (
               <div className="flex items-center gap-2">
@@ -53,16 +71,24 @@ export function DeviceDetailPage() {
             ) : (
               <div className="flex items-center gap-2"><h2 className="text-2xl font-bold">{device.name}</h2><Button variant="ghost" size="icon" onClick={() => { setEditName(device.name); setEditing(true) }}><Pencil size={14} /></Button></div>
             )}
-            <p className="text-muted-foreground">{device.ip}</p>
+            <p className="text-muted-foreground">{device.ip} · {isOn ? `${brightness}%` : 'Off'}</p>
           </div>
         </div>
-        <Button variant="outline" size="icon" onClick={handleToggle}><Power size={20} /></Button>
+        <Button variant={isOn ? 'default' : 'outline'} size="icon" onClick={handleToggle}><Power size={20} /></Button>
       </div>
       <Card className="bg-[var(--surface-1)] border-border">
-        <CardHeader><CardTitle>Color</CardTitle></CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
-          <HexColorPicker color={color} onChange={handleColorChange} style={{ width: '100%', maxWidth: 280 }} />
-          <p className="text-sm text-muted-foreground">{color}</p>
+        <CardContent className="p-4">
+          <Tabs defaultValue={device.last_state?.temp ? 'temp' : 'color'}>
+            <TabsList className="mb-4"><TabsTrigger value="color"><Palette size={14} className="mr-1" />Color</TabsTrigger><TabsTrigger value="temp"><Thermometer size={14} className="mr-1" />Temperature</TabsTrigger></TabsList>
+            <TabsContent value="color" className="flex flex-col items-center gap-4">
+              <HexColorPicker color={color} onChange={handleColorChange} style={{ width: '100%', maxWidth: 280 }} />
+              <p className="text-sm text-muted-foreground">{color}</p>
+            </TabsContent>
+            <TabsContent value="temp" className="flex flex-col gap-4">
+              <div className="flex items-center gap-3"><span className="text-xs text-muted-foreground w-14">2200K</span><Slider value={[colorTemp]} onValueChange={handleColorTemp} min={2200} max={6500} step={100} className="flex-1" /><span className="text-xs font-medium w-14 text-right">{colorTemp}K</span></div>
+              <p className="text-sm text-muted-foreground text-center">{tempToLabel(colorTemp)}</p>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
       <Card className="bg-[var(--surface-1)] border-border">
