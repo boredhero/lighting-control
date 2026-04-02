@@ -14,7 +14,7 @@ import { CreateGuestDialog } from '@/components/CreateGuestDialog'
 import { InviteLinkDialog } from '@/components/InviteLinkDialog'
 
 interface UserItem { id: string; username: string; is_admin: boolean; is_guest: boolean; guest_expires_at: string | null; totp_enabled: boolean; created_at: string }
-interface InviteItem { id: string; code: string; created_at: string; expires_at: string | null }
+interface InviteItem { id: string; code: string; role: string; created_at: string; expires_at: string | null }
 
 export function SettingsPage() {
   const { user, logout } = useAuthStore()
@@ -66,7 +66,7 @@ export function SettingsPage() {
                   {invites.map((inv) => (
                     <div key={inv.id} className="flex items-center justify-between py-2 px-3 bg-[var(--surface-2)] rounded">
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-xs">{inv.code.slice(0, 16)}...</span>
+                        <div className="flex items-center gap-2"><span className="font-mono text-xs">{inv.code.slice(0, 16)}...</span><Badge variant={inv.role === 'admin' ? 'default' : 'secondary'}>{inv.role === 'admin' ? 'Admin' : 'User'}</Badge></div>
                         <span className="text-xs text-muted-foreground">{inv.expires_at ? `Expires: ${new Date(inv.expires_at).toLocaleString()}` : 'No expiration'}</span>
                       </div>
                       <Button variant="ghost" size="icon" onClick={() => revokeInviteMutation.mutate(inv.id)}><X size={14} className="text-destructive" /></Button>
