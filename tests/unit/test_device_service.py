@@ -2,11 +2,13 @@
 import uuid
 from datetime import datetime, timezone
 import pytest
+from sqlalchemy import select
 from lighting_control.devices.models import Device, Room, Zone, Group, GroupDevice
 from lighting_control.devices.service import (
     assign_device, get_all_devices, get_device, get_device_by_mac,
     rename_device, resolve_device_ids, update_device_state, upsert_device,
     create_room, get_all_rooms, create_zone, create_group, get_all_groups,
+    export_hierarchy, import_hierarchy,
 )
 
 
@@ -140,3 +142,70 @@ class TestRoomZoneGroupCRUD:
         assert group.name == "Party"
         groups = await get_all_groups(test_db)
         assert len(groups) == 1
+
+
+class TestHierarchyExportImport:
+    async def test_export_contains_rooms_zones_groups(self, test_db, sample_devices, two_rooms, one_zone, one_group):
+        result = await export_hierarchy(test_db)
+        assert "rooms" in result and "groups" in result
+        assert len(result["rooms"]) == 2
+        assert len(result["groups"]) == 1
+        bedroom = next(r for r in result["rooms"] if r["name"] == "Bedroom")
+        assert len(bedroom["zones"]) == 1
+        assert bedroom["zones"][0]["name"] == "Upstairs"
+        assert set(bedroom["zones"][0]["device_macs"]) == {"AA:BB:CC:DD:EE:03", "AA:BB:CC:DD:EE:04"}
+        living = next(r for r in result["rooms"] if r["name"] == "Living Room")
+        assert set(living["device_macs"]) == {"AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02"}
+        assert len(living["zones"]) == 0
+        movie_group = result["groups"][0]
+        assert movie_group["name"] == "Movie Lights"
+        assert set(movie_group["device_macs"]) == {"AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:03"}
+
+    async def test_export_roundtrip_into_fresh_db(self, test_db, sample_devices, two_rooms, one_zone, one_group):
+        exported = await export_hierarchy(test_db)
+        from lighting_control.devices.models import Room as RoomModel, Zone as ZoneModel, Group as GroupModel, GroupDevice as GDModel
+        from sqlalchemy import delete
+        await test_db.execute(delete(GDModel))
+        await test_db.execute(delete(GroupModel))
+        for d in sample_devices:
+            d.room_id = None
+            d.zone_id = None
+        await test_db.flush()
+        await test_db.execute(delete(ZoneModel))
+        await test_db.execute(delete(RoomModel))
+        await test_db.flush()
+        result = await import_hierarchy(test_db, exported)
+        assert result["rooms_created"] == 2
+        assert result["zones_created"] == 1
+        assert result["groups_created"] == 1
+        assert result["devices_assigned"] == 4
+        re_exported = await export_hierarchy(test_db)
+        assert len(re_exported["rooms"]) == 2
+        assert len(re_exported["groups"]) == 1
+        bedroom = next(r for r in re_exported["rooms"] if r["name"] == "Bedroom")
+        assert set(bedroom["zones"][0]["device_macs"]) == {"AA:BB:CC:DD:EE:03", "AA:BB:CC:DD:EE:04"}
+
+    async def test_import_idempotent_updates_existing(self, test_db, sample_devices, two_rooms, one_zone, one_group):
+        exported = await export_hierarchy(test_db)
+        result = await import_hierarchy(test_db, exported)
+        assert result["rooms_updated"] == 2
+        assert result["rooms_created"] == 0
+        assert result["zones_updated"] == 1
+        assert result["zones_created"] == 0
+        assert result["groups_updated"] == 1
+        assert result["groups_created"] == 0
+
+    async def test_import_skips_unknown_macs(self, test_db):
+        data = {"rooms": [{"name": "Ghost Room", "icon": None, "zones": [], "device_macs": ["ZZ:ZZ:ZZ:ZZ:ZZ:ZZ"]}], "groups": []}
+        result = await import_hierarchy(test_db, data)
+        assert result["rooms_created"] == 1
+        assert result["devices_assigned"] == 0
+
+    async def test_device_only_in_one_room_zone(self, test_db, sample_devices):
+        """A device MAC appearing in multiple rooms should end up in whichever one is processed last."""
+        data = {"rooms": [{"name": "Room A", "icon": None, "zones": [], "device_macs": ["AA:BB:CC:DD:EE:01"]}, {"name": "Room B", "icon": None, "zones": [{"name": "Z1", "icon": None, "device_macs": ["AA:BB:CC:DD:EE:01"]}], "device_macs": []}], "groups": []}
+        await import_hierarchy(test_db, data)
+        device = await get_device_by_mac(test_db, "AA:BB:CC:DD:EE:01")
+        room_b = (await test_db.execute(select(Room).where(Room.name == "Room B"))).scalar_one()
+        assert device.room_id == room_b.id
+        assert device.zone_id is not None

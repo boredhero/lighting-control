@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight, Download, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface HierarchyDevice { id: string; name: string; mac: string; ip: string; is_online: boolean; last_state: Record<string, unknown> | null }
@@ -91,6 +91,7 @@ export function RoomsZonesPage() {
   const [addDeviceTo, setAddDeviceTo] = useState<{ type: 'room' | 'zone' | 'group'; id: string; name: string } | null>(null)
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
   const { data: hierarchy } = useQuery<Hierarchy>({ queryKey: ['hierarchy'], queryFn: () => api.get('/devices/hierarchy') })
   const { data: allDevices = [] } = useQuery<AllDevice[]>({ queryKey: ['devices'], queryFn: () => api.get('/devices') })
@@ -100,6 +101,24 @@ export function RoomsZonesPage() {
   const deleteRoomMutation = useMutation({ mutationFn: (id: string) => api.delete(`/rooms/${id}`), onSuccess: () => { toast.success('Room deleted'); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }); queryClient.invalidateQueries({ queryKey: ['rooms'] }) }, onError: (err: Error) => toast.error(err.message) })
   const deleteZoneMutation = useMutation({ mutationFn: (id: string) => api.delete(`/zones/${id}`), onSuccess: () => { toast.success('Zone deleted'); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }) }, onError: (err: Error) => toast.error(err.message) })
   const deleteGroupMutation = useMutation({ mutationFn: (id: string) => api.delete(`/groups/${id}`), onSuccess: () => { toast.success('Group deleted'); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const importMutation = useMutation({ mutationFn: (data: Record<string, unknown>) => api.post<Record<string, number>>('/devices/hierarchy/import', data), onSuccess: (data) => { const d = data as Record<string, number>; toast.success(`Imported: ${d.rooms_created + d.rooms_updated} rooms, ${d.zones_created + d.zones_updated} zones, ${d.groups_created + d.groups_updated} groups, ${d.devices_assigned} device assignments`); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }); queryClient.invalidateQueries({ queryKey: ['rooms'] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const handleExport = async () => {
+    const data = await api.get<Record<string, unknown>>('/devices/hierarchy/export')
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'lighting-hierarchy.json'; a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Hierarchy exported')
+  }
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => { try { const data = JSON.parse(reader.result as string); importMutation.mutate(data) } catch { toast.error('Invalid JSON file') } }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
   const toggleRoom = (id: string) => { const next = new Set(expandedRooms); if (next.has(id)) next.delete(id); else next.add(id); setExpandedRooms(next) }
   const handleAddDevice = (deviceId: string) => {
     if (!addDeviceTo) return
@@ -118,7 +137,12 @@ export function RoomsZonesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h2 className="text-xl font-semibold">Rooms, Zones & Groups</h2>
-        <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        <div className="flex items-center gap-2">
+          <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Button variant="outline" size="icon" onClick={handleExport} title="Export rooms, zones & groups"><Download size={16} /></Button>
+          <Button variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} title="Import rooms, zones & groups"><Upload size={16} /></Button>
+          <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
+        </div>
       </div>
       <Tabs defaultValue="rooms">
         <TabsList><TabsTrigger value="rooms">Rooms & Zones</TabsTrigger><TabsTrigger value="groups">Groups</TabsTrigger></TabsList>
