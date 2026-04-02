@@ -54,9 +54,10 @@ def _translate_state_to_pilot_args(state: dict) -> dict:
     """Translate frontend/WiZ protocol keys to PilotBuilder parameter names."""
     translated = {}
     if "dimming" in state:
-        translated["brightness"] = state["dimming"]
+        translated["brightness"] = int(state["dimming"] * 255 / 100)
     if "brightness" in state:
-        translated["brightness"] = state["brightness"]
+        val = state["brightness"]
+        translated["brightness"] = int(val * 255 / 100) if val <= 100 else val
     if "temp" in state:
         translated["colortemp"] = state["temp"]
     if "colortemp" in state:
