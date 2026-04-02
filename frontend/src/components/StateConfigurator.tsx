@@ -19,7 +19,7 @@ export function StateConfigurator({ state, onChange }: StateConfiguratorProps) {
   const handleColorChange = (hex: string) => { setColor(hex); const { r, g, b } = hexToRgb(hex); onChange({ r, g, b, dimming: brightness }) }
   const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); onChange({ ...state, dimming: v }) }
   const handleTemp = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setColorTemp(v); onChange({ temp: v, dimming: brightness }) }
-  const handleTurnOff = (off: boolean) => { setTurnOff(off); onChange(off ? { state: false } : { dimming: brightness }) }
+  const handleTurnOff = (off: boolean) => { setTurnOff(off); onChange(off ? { turn_off: true } : { dimming: brightness }) }
   return (
     <div className="flex flex-col gap-4 p-3 bg-[var(--surface-2)] rounded-lg">
       <div className="flex items-center gap-3">
