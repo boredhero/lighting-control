@@ -51,6 +51,32 @@ async def bulk_control(req: schemas.BulkControlRequest, user: User = Depends(req
     return {"results": results}
 
 
+@router.get("/hierarchy", response_model=dict)
+async def get_hierarchy(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Full nested hierarchy: rooms → zones → devices, plus unassigned and groups."""
+    from sqlalchemy.orm import selectinload
+    rooms_result = await db.execute(select(service.Room).options(selectinload(service.Room.zones).selectinload(service.Zone.devices), selectinload(service.Room.devices)).order_by(service.Room.sort_order))
+    rooms = rooms_result.scalars().unique().all()
+    all_devices = await service.get_all_devices(db)
+    assigned_ids = set()
+    rooms_data = []
+    for room in rooms:
+        zones_data = []
+        for zone in room.zones:
+            zone_devices = [{"id": d.id, "name": d.name, "mac": d.mac, "ip": d.ip, "is_online": d.is_online, "last_state": d.last_state} for d in zone.devices]
+            for d in zone.devices:
+                assigned_ids.add(d.id)
+            zones_data.append({"id": zone.id, "name": zone.name, "icon": zone.icon, "devices": zone_devices})
+        unzoned = [{"id": d.id, "name": d.name, "mac": d.mac, "ip": d.ip, "is_online": d.is_online, "last_state": d.last_state} for d in room.devices if d.zone_id is None]
+        for d in room.devices:
+            assigned_ids.add(d.id)
+        rooms_data.append({"id": room.id, "name": room.name, "icon": room.icon, "zones": zones_data, "devices": unzoned})
+    unassigned = [{"id": d.id, "name": d.name, "mac": d.mac, "ip": d.ip, "is_online": d.is_online, "last_state": d.last_state} for d in all_devices if d.id not in assigned_ids]
+    groups = await service.get_all_groups(db)
+    groups_data = [{"id": g.id, "name": g.name, "icon": g.icon, "device_ids": [gd.device_id for gd in g.group_devices]} for g in groups]
+    return {"rooms": rooms_data, "unassigned": unassigned, "groups": groups_data}
+
+
 @router.post("/discover", response_model=dict)
 async def trigger_discovery(user: User = Depends(require_permission("can_manage_devices")), db: AsyncSession = Depends(get_session)):
     count = await discovery.run_discovery_and_persist()
@@ -112,14 +138,14 @@ async def list_zones(user: User = Depends(get_current_user), db: AsyncSession = 
 
 @zones_router.post("", response_model=schemas.ZoneResponse, status_code=status.HTTP_201_CREATED)
 async def create_zone(req: schemas.ZoneRequest, user: User = Depends(require_permission("can_manage_devices")), db: AsyncSession = Depends(get_session)):
-    zone = await service.create_zone(db, req.name, req.icon)
+    zone = await service.create_zone(db, req.name, req.room_id, req.icon)
     await db.commit()
     return zone
 
 
 @zones_router.put("/{zone_id}", response_model=schemas.ZoneResponse)
 async def update_zone(zone_id: str, req: schemas.ZoneRequest, user: User = Depends(require_permission("can_manage_devices")), db: AsyncSession = Depends(get_session)):
-    zone = await service.update_zone(db, zone_id, req.name, req.icon)
+    zone = await service.update_zone(db, zone_id, req.name, req.room_id, req.icon)
     if not zone:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zone not found")
     await db.commit()

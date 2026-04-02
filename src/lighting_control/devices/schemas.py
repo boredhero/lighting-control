@@ -55,12 +55,14 @@ class RoomResponse(BaseModel):
 
 class ZoneRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    room_id: str
     icon: str | None = None
 
 
 class ZoneResponse(BaseModel):
     id: str
     name: str
+    room_id: str
     icon: str | None
     sort_order: int
     created_at: datetime
