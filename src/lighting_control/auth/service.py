@@ -106,9 +106,9 @@ async def revoke_user_sessions(db: AsyncSession, user_id: str) -> None:
     await db.flush()
 
 
-async def create_invite(db: AsyncSession, created_by: str, expires_at: datetime | None = None) -> InviteCode:
+async def create_invite(db: AsyncSession, created_by: str, expires_at: datetime | None = None, role: str = "user", permissions: dict | None = None) -> InviteCode:
     code = secrets.token_urlsafe(32)
-    invite = InviteCode(code=code, created_by=created_by, expires_at=expires_at)
+    invite = InviteCode(code=code, created_by=created_by, expires_at=expires_at, role=role, permissions=permissions or DEFAULT_PERMISSIONS)
     db.add(invite)
     await db.flush()
     return invite
