@@ -44,6 +44,20 @@ async def import_devices(mappings: list[dict], user: User = Depends(require_perm
     return {"updated": updated, "total": len(mappings)}
 
 
+@router.get("/hierarchy/export", response_model=dict)
+async def export_hierarchy(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    """Export rooms, zones, groups, and device assignments as MAC-based JSON for backup/restore."""
+    return await service.export_hierarchy(db)
+
+
+@router.post("/hierarchy/import", response_model=dict)
+async def import_hierarchy(data: dict, user: User = Depends(require_permission("can_manage_devices")), db: AsyncSession = Depends(get_session)):
+    """Restore rooms, zones, groups, and device assignments from a previously exported JSON."""
+    result = await service.import_hierarchy(db, data)
+    await db.commit()
+    return result
+
+
 @router.get("/hierarchy", response_model=dict)
 async def get_hierarchy(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
     """Full nested hierarchy: rooms → zones → devices, plus unassigned and groups."""
