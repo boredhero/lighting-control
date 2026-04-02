@@ -22,7 +22,7 @@ export function DeviceDetailPage() {
   const [brightness, setBrightness] = useState(100)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
-  const controlMutation = useMutation({ mutationFn: (state: Record<string, unknown>) => api.post(`/devices/${id}/control`, { state }), onSuccess: () => { toast.success('Device updated'); queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const controlMutation = useMutation({ mutationFn: (state: Record<string, unknown>) => api.post<{ success: boolean }>(`/devices/${id}/control`, { state }), onSuccess: (data) => { const d = data as { success: boolean }; if (d.success) { toast.success('Device updated') } else { toast.error('Device did not respond') }; queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
   const renameMutation = useMutation({ mutationFn: (name: string) => api.post(`/devices/${id}/rename`, { name }), onSuccess: () => { toast.success('Device renamed'); queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }); setEditing(false) }, onError: (err: Error) => toast.error(err.message) })
   useEffect(() => {
     if (device?.last_state) {
@@ -34,7 +34,8 @@ export function DeviceDetailPage() {
   const hexToRgb = (hex: string) => { const r = parseInt(hex.slice(1, 3), 16); const g = parseInt(hex.slice(3, 5), 16); const b = parseInt(hex.slice(5, 7), 16); return { r, g, b } }
   const handleColorChange = (hex: string) => { setColor(hex); const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }
   const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); controlMutation.mutate({ dimming: v }) }
-  const handleToggle = () => { controlMutation.mutate({ state: device.last_state?.state === false ? true : false }) }
+  const isOn = device.last_state?.state !== false
+  const handleToggle = () => { controlMutation.mutate(isOn ? { turn_off: true } : { dimming: brightness }) }
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
