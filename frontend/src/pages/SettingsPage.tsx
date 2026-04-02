@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useNavigate } from 'react-router-dom'
-import { Trash2, UserPlus, Link2, Shield, Key, Users, X } from 'lucide-react'
+import { Trash2, UserPlus, Link2, Shield, Key, Users, X, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { TOTPSetupDialog } from '@/components/TOTPSetupDialog'
 import { CreateGuestDialog } from '@/components/CreateGuestDialog'
 import { InviteLinkDialog } from '@/components/InviteLinkDialog'
+import { EditUserDialog } from '@/components/EditUserDialog'
 
-interface UserItem { id: string; username: string; is_admin: boolean; is_guest: boolean; guest_expires_at: string | null; totp_enabled: boolean; created_at: string }
+interface UserItem { id: string; username: string; is_admin: boolean; is_guest: boolean; guest_expires_at: string | null; totp_enabled: boolean; permissions: Record<string, boolean>; created_at: string }
 interface InviteItem { id: string; code: string; role: string; created_at: string; expires_at: string | null }
 
 export function SettingsPage() {
@@ -23,6 +24,7 @@ export function SettingsPage() {
   const [totpOpen, setTotpOpen] = useState(false)
   const [guestOpen, setGuestOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [editUser, setEditUser] = useState<UserItem | null>(null)
   const { data: users = [] } = useQuery<UserItem[]>({ queryKey: ['users'], queryFn: () => api.get('/auth/users'), enabled: user?.is_admin === true })
   const { data: invites = [] } = useQuery<InviteItem[]>({ queryKey: ['invites'], queryFn: () => api.get('/auth/invites'), enabled: user?.is_admin === true })
   const deleteMutation = useMutation({ mutationFn: (id: string) => api.delete(`/auth/users/${id}`), onSuccess: () => { toast.success('User deleted'); queryClient.invalidateQueries({ queryKey: ['users'] }) }, onError: (err: Error) => toast.error(err.message) })
@@ -84,10 +86,16 @@ export function SettingsPage() {
                     <span className="font-medium text-sm">{u.username}</span>
                     {u.is_admin && <Badge variant="default">Admin</Badge>}
                     {u.is_guest && <Badge variant="secondary">Guest</Badge>}
+                    {!u.is_admin && !u.is_guest && <Badge variant="outline">User</Badge>}
                     {u.totp_enabled && <Badge variant="outline">TOTP</Badge>}
                     {u.is_guest && u.guest_expires_at && <span className="text-xs text-muted-foreground">Expires: {new Date(u.guest_expires_at).toLocaleDateString()}</span>}
                   </div>
-                  {u.id !== user?.id && <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete user "${u.username}"?`)) deleteMutation.mutate(u.id) }}><Trash2 size={14} className="text-destructive" /></Button>}
+                  {u.id !== user?.id && (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => setEditUser(u)}><Pencil size={14} /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => { if (confirm(`Delete user "${u.username}"?`)) deleteMutation.mutate(u.id) }}><Trash2 size={14} className="text-destructive" /></Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -98,6 +106,7 @@ export function SettingsPage() {
       <TOTPSetupDialog open={totpOpen} onOpenChange={setTotpOpen} />
       <CreateGuestDialog open={guestOpen} onOpenChange={setGuestOpen} />
       <InviteLinkDialog open={inviteOpen} onOpenChange={setInviteOpen} />
+      <EditUserDialog open={!!editUser} onOpenChange={(open) => { if (!open) setEditUser(null) }} user={editUser} />
     </div>
   )
 }

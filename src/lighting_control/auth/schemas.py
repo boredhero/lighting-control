@@ -108,6 +108,12 @@ class APIKeyCreateResponse(BaseModel):
     created_at: datetime
 
 
+class UserUpdateRequest(BaseModel):
+    role: str = Field(pattern="^(admin|user|guest)$")
+    permissions: dict = Field(default_factory=dict)
+    guest_expires_at: datetime | None = None
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=255)

@@ -161,6 +161,18 @@ async def get_all_users(db: AsyncSession) -> list[User]:
     return list(result.scalars().all())
 
 
+async def update_user(db: AsyncSession, user_id: str, role: str, permissions: dict, guest_expires_at: datetime | None = None) -> User | None:
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        return None
+    user.is_admin = (role == "admin")
+    user.is_guest = (role == "guest")
+    user.permissions = permissions
+    user.guest_expires_at = guest_expires_at if role == "guest" else None
+    await db.flush()
+    return user
+
+
 async def delete_user(db: AsyncSession, user_id: str) -> bool:
     user = await get_user_by_id(db, user_id)
     if not user:

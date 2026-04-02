@@ -208,6 +208,17 @@ async def list_users(admin: User = Depends(require_admin), db: AsyncSession = De
     return users
 
 
+@router.put("/users/{user_id}", response_model=schemas.UserResponse)
+async def update_user(user_id: str, req: schemas.UserUpdateRequest, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot modify your own role")
+    user = await service.update_user(db, user_id, req.role, req.permissions, req.guest_expires_at)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await db.commit()
+    return user
+
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_session)):
     if user_id == admin.id:
