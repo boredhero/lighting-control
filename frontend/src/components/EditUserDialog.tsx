@@ -48,7 +48,7 @@ export function EditUserDialog({ open, onOpenChange, user: editUser }: Props) {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label>Role</Label>
-            <Select value={roleId} onValueChange={setRoleId}>
+            <Select value={roleId} onValueChange={(v) => { if (v) setRoleId(v) }}>
               <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
               <SelectContent>{roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
             </Select>
