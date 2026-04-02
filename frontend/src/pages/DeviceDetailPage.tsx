@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { HexColorPicker } from 'react-colorful'
 import { formatMac } from '@/lib/utils'
 import { toast } from 'sonner'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface Device { id: string; name: string; mac: string; ip: string; model: string | null; bulb_type: string | null; firmware_version: string | null; is_online: boolean; last_state: Record<string, unknown> | null; room_id: string | null; zone_id: string | null }
 
@@ -22,6 +22,8 @@ export function DeviceDetailPage() {
   const [brightness, setBrightness] = useState(100)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
+  const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const brightnessTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const controlMutation = useMutation({ mutationFn: (state: Record<string, unknown>) => api.post<{ success: boolean }>(`/devices/${id}/control`, { state }), onSuccess: (data) => { const d = data as { success: boolean }; if (d.success) { toast.success('Device updated') } else { toast.error('Device did not respond') }; queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
   const renameMutation = useMutation({ mutationFn: (name: string) => api.post(`/devices/${id}/rename`, { name }), onSuccess: () => { toast.success('Device renamed'); queryClient.invalidateQueries({ queryKey: ['device', id] }); queryClient.invalidateQueries({ queryKey: ['devices'] }); setEditing(false) }, onError: (err: Error) => toast.error(err.message) })
   useEffect(() => {
@@ -31,11 +33,9 @@ export function DeviceDetailPage() {
     }
   }, [device])
   if (!device) return <p className="text-muted-foreground">Loading...</p>
-  const colorTimeout = useState<ReturnType<typeof setTimeout> | null>(null)
-  const brightnessTimeout = useState<ReturnType<typeof setTimeout> | null>(null)
   const hexToRgb = (hex: string) => { const r = parseInt(hex.slice(1, 3), 16); const g = parseInt(hex.slice(3, 5), 16); const b = parseInt(hex.slice(5, 7), 16); return { r, g, b } }
-  const handleColorChange = (hex: string) => { setColor(hex); if (colorTimeout[0]) clearTimeout(colorTimeout[0]); colorTimeout[1](setTimeout(() => { const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }, 300)) }
-  const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); if (brightnessTimeout[0]) clearTimeout(brightnessTimeout[0]); brightnessTimeout[1](setTimeout(() => { controlMutation.mutate({ dimming: v }) }, 300)) }
+  const handleColorChange = (hex: string) => { setColor(hex); if (colorTimer.current) clearTimeout(colorTimer.current); colorTimer.current = setTimeout(() => { const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }, 300) }
+  const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); if (brightnessTimer.current) clearTimeout(brightnessTimer.current); brightnessTimer.current = setTimeout(() => { controlMutation.mutate({ dimming: v }) }, 300) }
   const isOn = device.last_state?.state !== false
   const handleToggle = () => { controlMutation.mutate(isOn ? { turn_off: true } : { dimming: brightness }) }
   return (
