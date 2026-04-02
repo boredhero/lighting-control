@@ -4,8 +4,8 @@ import { api } from '@/api/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Lightbulb, Radar } from 'lucide-react'
-import { useState } from 'react'
+import { Lightbulb, Radar, Download, Upload } from 'lucide-react'
+import { useState, useRef } from 'react'
 import { toast } from 'sonner'
 
 interface Device { id: string; name: string; mac: string; ip: string; is_online: boolean; bulb_type: string | null; room_id: string | null; last_state: Record<string, unknown> | null }
@@ -40,7 +40,26 @@ export function DevicesPage() {
   const [search, setSearch] = useState('')
   const queryClient = useQueryClient()
   const { data: devices = [], isLoading } = useQuery<Device[]>({ queryKey: ['devices'], queryFn: () => api.get('/devices') })
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const discoverMutation = useMutation({ mutationFn: () => api.post<{ discovered: number }>('/devices/discover'), onSuccess: (data) => { toast.success(`Discovery complete: ${(data as { discovered: number }).discovered} device(s) found`); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const importMutation = useMutation({ mutationFn: (mappings: { mac: string; name: string }[]) => api.post<{ updated: number; total: number }>('/devices/import', mappings), onSuccess: (data) => { const d = data as { updated: number; total: number }; toast.success(`Restored ${d.updated}/${d.total} device names`); queryClient.invalidateQueries({ queryKey: ['devices'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const handleExport = async () => {
+    const data = await api.get<{ mac: string; name: string }[]>('/devices/export')
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'lighting-devices.json'; a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${(data as { mac: string; name: string }[]).length} devices`)
+  }
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => { try { const mappings = JSON.parse(reader.result as string); importMutation.mutate(mappings) } catch { toast.error('Invalid JSON file') } }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
   const filtered = devices.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()) || d.mac.toLowerCase().includes(search.toLowerCase()))
   return (
     <div className="space-y-4">
@@ -48,6 +67,9 @@ export function DevicesPage() {
         <h2 className="text-xl font-semibold">Devices</h2>
         <div className="flex items-center gap-2">
           <Input placeholder="Search devices..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Button variant="outline" size="icon" onClick={handleExport} title="Export device names"><Download size={16} /></Button>
+          <Button variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} title="Import device names"><Upload size={16} /></Button>
+          <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
           <Button variant="outline" onClick={() => discoverMutation.mutate()} disabled={discoverMutation.isPending}><Radar size={16} className="mr-2" />{discoverMutation.isPending ? 'Scanning...' : 'Scan Network'}</Button>
         </div>
       </div>
