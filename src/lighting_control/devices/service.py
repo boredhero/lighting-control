@@ -120,8 +120,8 @@ async def get_all_zones(db: AsyncSession) -> list[Zone]:
     return list(result.scalars().all())
 
 
-async def create_zone(db: AsyncSession, name: str, icon: str | None = None) -> Zone:
-    zone = Zone(name=name, icon=icon)
+async def create_zone(db: AsyncSession, name: str, room_id: str, icon: str | None = None) -> Zone:
+    zone = Zone(name=name, room_id=room_id, icon=icon)
     db.add(zone)
     await db.flush()
     return zone
@@ -132,10 +132,11 @@ async def get_zone(db: AsyncSession, zone_id: str) -> Zone | None:
     return result.scalar_one_or_none()
 
 
-async def update_zone(db: AsyncSession, zone_id: str, name: str, icon: str | None) -> Zone | None:
+async def update_zone(db: AsyncSession, zone_id: str, name: str, room_id: str, icon: str | None) -> Zone | None:
     zone = await get_zone(db, zone_id)
     if zone:
         zone.name = name
+        zone.room_id = room_id
         zone.icon = icon
         await db.flush()
     return zone
