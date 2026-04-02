@@ -153,16 +153,16 @@ class TestSessionRevocation:
 
 
 class TestInviteCodes:
-    async def test_create_and_get_invite(self, test_db, admin_user):
-        invite = await create_invite(test_db, admin_user.id)
+    async def test_create_and_get_invite(self, test_db, admin_user, user_role):
+        invite = await create_invite(test_db, admin_user.id, role_id=user_role.id)
         assert invite.code is not None
         assert invite.used is False
         found = await get_invite(test_db, invite.code)
         assert found is not None
         assert found.id == invite.id
 
-    async def test_used_invite_not_found(self, test_db, admin_user):
-        invite = await create_invite(test_db, admin_user.id)
+    async def test_used_invite_not_found(self, test_db, admin_user, user_role):
+        invite = await create_invite(test_db, admin_user.id, role_id=user_role.id)
         await use_invite(test_db, invite, admin_user.id)
         found = await get_invite(test_db, invite.code)
         assert found is None, "Used invite should not be retrievable"
