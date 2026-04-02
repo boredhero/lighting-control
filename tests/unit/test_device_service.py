@@ -126,8 +126,10 @@ class TestRoomZoneGroupCRUD:
         assert room.icon == "utensils"
 
     async def test_create_zone(self, test_db):
-        zone = await create_zone(test_db, "Downstairs")
+        room = await create_room(test_db, "Test Room")
+        zone = await create_zone(test_db, "Downstairs", room.id)
         assert zone.name == "Downstairs"
+        assert zone.room_id == room.id
 
     async def test_create_group_with_devices(self, test_db):
         d1 = Device(id=str(uuid.uuid4()), mac="FF:FF:FF:FF:FF:01", ip="10.0.0.1", name="D1", is_online=True)

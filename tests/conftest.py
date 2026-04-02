@@ -92,9 +92,10 @@ async def two_rooms(test_db: AsyncSession) -> tuple[Room, Room]:
 
 
 @pytest_asyncio.fixture
-async def one_zone(test_db: AsyncSession) -> Zone:
-    """A single zone: Upstairs."""
-    z = Zone(id=str(uuid.uuid4()), name="Upstairs", sort_order=0)
+async def one_zone(test_db: AsyncSession, two_rooms: tuple[Room, Room]) -> Zone:
+    """A single zone: Upstairs, belonging to the Bedroom."""
+    _, r2 = two_rooms
+    z = Zone(id=str(uuid.uuid4()), name="Upstairs", room_id=r2.id, sort_order=0)
     test_db.add(z)
     await test_db.flush()
     return z
