@@ -31,9 +31,11 @@ export function DeviceDetailPage() {
     }
   }, [device])
   if (!device) return <p className="text-muted-foreground">Loading...</p>
+  const colorTimeout = useState<ReturnType<typeof setTimeout> | null>(null)
+  const brightnessTimeout = useState<ReturnType<typeof setTimeout> | null>(null)
   const hexToRgb = (hex: string) => { const r = parseInt(hex.slice(1, 3), 16); const g = parseInt(hex.slice(3, 5), 16); const b = parseInt(hex.slice(5, 7), 16); return { r, g, b } }
-  const handleColorChange = (hex: string) => { setColor(hex); const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }
-  const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); controlMutation.mutate({ dimming: v }) }
+  const handleColorChange = (hex: string) => { setColor(hex); if (colorTimeout[0]) clearTimeout(colorTimeout[0]); colorTimeout[1](setTimeout(() => { const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }, 300)) }
+  const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); if (brightnessTimeout[0]) clearTimeout(brightnessTimeout[0]); brightnessTimeout[1](setTimeout(() => { controlMutation.mutate({ dimming: v }) }, 300)) }
   const isOn = device.last_state?.state !== false
   const handleToggle = () => { controlMutation.mutate(isOn ? { turn_off: true } : { dimming: brightness }) }
   return (
