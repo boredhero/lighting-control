@@ -197,6 +197,91 @@ async def delete_group(db: AsyncSession, group_id: str) -> bool:
     return False
 
 
+async def export_hierarchy(db: AsyncSession) -> dict:
+    """Export rooms, zones, groups, and device assignments as a MAC-based JSON structure."""
+    rooms = await db.execute(select(Room).options(selectinload(Room.zones).selectinload(Zone.devices), selectinload(Room.devices)).order_by(Room.sort_order))
+    rooms_data = []
+    for room in rooms.scalars().unique().all():
+        zones_data = []
+        for zone in sorted(room.zones, key=lambda z: z.sort_order):
+            zones_data.append({"name": zone.name, "icon": zone.icon, "device_macs": [d.mac for d in zone.devices]})
+        unzoned_macs = [d.mac for d in room.devices if d.zone_id is None]
+        rooms_data.append({"name": room.name, "icon": room.icon, "zones": zones_data, "device_macs": unzoned_macs})
+    groups = await get_all_groups(db)
+    all_devices = await get_all_devices(db)
+    device_map = {d.id: d.mac for d in all_devices}
+    groups_data = [{"name": g.name, "icon": g.icon, "device_macs": [device_map[gd.device_id] for gd in g.group_devices if gd.device_id in device_map]} for g in groups]
+    return {"rooms": rooms_data, "groups": groups_data}
+
+
+async def import_hierarchy(db: AsyncSession, data: dict) -> dict:
+    """Restore rooms, zones, groups, and device assignments from an exported JSON structure. Returns summary counts."""
+    all_devices = await get_all_devices(db)
+    mac_to_device = {d.mac: d for d in all_devices}
+    rooms_created = 0
+    rooms_updated = 0
+    zones_created = 0
+    zones_updated = 0
+    groups_created = 0
+    groups_updated = 0
+    devices_assigned = 0
+    for room_data in data.get("rooms", []):
+        existing_rooms = await db.execute(select(Room).where(Room.name == room_data["name"]))
+        room = existing_rooms.scalar_one_or_none()
+        if room:
+            room.icon = room_data.get("icon")
+            rooms_updated += 1
+        else:
+            room = Room(name=room_data["name"], icon=room_data.get("icon"))
+            db.add(room)
+            await db.flush()
+            rooms_created += 1
+        for mac in room_data.get("device_macs", []):
+            device = mac_to_device.get(mac)
+            if device:
+                device.room_id = room.id
+                device.zone_id = None
+                devices_assigned += 1
+        for zone_data in room_data.get("zones", []):
+            existing_zones = await db.execute(select(Zone).where(Zone.name == zone_data["name"], Zone.room_id == room.id))
+            zone = existing_zones.scalar_one_or_none()
+            if zone:
+                zone.icon = zone_data.get("icon")
+                zones_updated += 1
+            else:
+                zone = Zone(name=zone_data["name"], room_id=room.id, icon=zone_data.get("icon"))
+                db.add(zone)
+                await db.flush()
+                zones_created += 1
+            for mac in zone_data.get("device_macs", []):
+                device = mac_to_device.get(mac)
+                if device:
+                    device.room_id = room.id
+                    device.zone_id = zone.id
+                    devices_assigned += 1
+    for group_data in data.get("groups", []):
+        existing_groups = await db.execute(select(Group).options(selectinload(Group.group_devices)).where(Group.name == group_data["name"]))
+        group = existing_groups.scalar_one_or_none()
+        if group:
+            group.icon = group_data.get("icon")
+            for gd in group.group_devices:
+                await db.delete(gd)
+            await db.flush()
+            groups_updated += 1
+        else:
+            group = Group(name=group_data["name"], icon=group_data.get("icon"))
+            db.add(group)
+            await db.flush()
+            groups_created += 1
+        for mac in group_data.get("device_macs", []):
+            device = mac_to_device.get(mac)
+            if device:
+                gd = GroupDevice(group_id=group.id, device_id=device.id)
+                db.add(gd)
+    await db.flush()
+    return {"rooms_created": rooms_created, "rooms_updated": rooms_updated, "zones_created": zones_created, "zones_updated": zones_updated, "groups_created": groups_created, "groups_updated": groups_updated, "devices_assigned": devices_assigned}
+
+
 async def resolve_device_ids(db: AsyncSession, target_type: str, target_id: str | None, exclude_device_ids: list[str] | None = None) -> list[str]:
     """Resolve a target (room, zone, group, all, all_except, device) to a list of device IDs."""
     if target_type == "device" and target_id:
