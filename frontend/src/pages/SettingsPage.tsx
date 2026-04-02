@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useNavigate } from 'react-router-dom'
-import { Trash2, UserPlus, Link2, Shield, Key, Users } from 'lucide-react'
+import { Trash2, UserPlus, Link2, Shield, Key, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { TOTPSetupDialog } from '@/components/TOTPSetupDialog'
 import { CreateGuestDialog } from '@/components/CreateGuestDialog'
 import { InviteLinkDialog } from '@/components/InviteLinkDialog'
 
 interface UserItem { id: string; username: string; is_admin: boolean; is_guest: boolean; guest_expires_at: string | null; totp_enabled: boolean; created_at: string }
+interface InviteItem { id: string; code: string; created_at: string; expires_at: string | null }
 
 export function SettingsPage() {
   const { user, logout } = useAuthStore()
@@ -23,7 +24,9 @@ export function SettingsPage() {
   const [guestOpen, setGuestOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const { data: users = [] } = useQuery<UserItem[]>({ queryKey: ['users'], queryFn: () => api.get('/auth/users'), enabled: user?.is_admin === true })
+  const { data: invites = [] } = useQuery<InviteItem[]>({ queryKey: ['invites'], queryFn: () => api.get('/auth/invites'), enabled: user?.is_admin === true })
   const deleteMutation = useMutation({ mutationFn: (id: string) => api.delete(`/auth/users/${id}`), onSuccess: () => { toast.success('User deleted'); queryClient.invalidateQueries({ queryKey: ['users'] }) }, onError: (err: Error) => toast.error(err.message) })
+  const revokeInviteMutation = useMutation({ mutationFn: (id: string) => api.delete(`/auth/invites/${id}`), onSuccess: () => { toast.success('Invite revoked'); queryClient.invalidateQueries({ queryKey: ['invites'] }) }, onError: (err: Error) => toast.error(err.message) })
   const disableTotpMutation = useMutation({ mutationFn: () => api.delete('/auth/me/totp'), onSuccess: () => { toast.success('TOTP disabled'); queryClient.invalidateQueries({ queryKey: ['user'] }); window.location.reload() }, onError: (err: Error) => toast.error(err.message) })
   const handleLogout = async () => { await logout(); navigate('/login') }
   return (
@@ -55,6 +58,23 @@ export function SettingsPage() {
               <Button variant="outline" size="sm" onClick={() => setGuestOpen(true)}><UserPlus size={14} className="mr-1" />Create Guest</Button>
               <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}><Link2 size={14} className="mr-1" />Generate Invite Link</Button>
             </div>
+            {invites.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Active Invite Links</h3>
+                  {invites.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between py-2 px-3 bg-[var(--surface-2)] rounded">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-xs">{inv.code.slice(0, 16)}...</span>
+                        <span className="text-xs text-muted-foreground">{inv.expires_at ? `Expires: ${new Date(inv.expires_at).toLocaleString()}` : 'No expiration'}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => revokeInviteMutation.mutate(inv.id)}><X size={14} className="text-destructive" /></Button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
             <Separator />
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-muted-foreground">All Users</h3>
