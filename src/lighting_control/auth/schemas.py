@@ -49,17 +49,23 @@ class GuestCreateRequest(BaseModel):
 
 class InviteCreateRequest(BaseModel):
     expires_at: datetime | None = None
+    role: str = Field(default="user", pattern="^(admin|user)$")
+    permissions: dict = Field(default_factory=lambda: {"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": False, "can_view_schedules": True, "can_manage_schedules": False, "can_manage_devices": False, "can_manage_users": False})
 
 
 class InviteCreateResponse(BaseModel):
     code: str
     url: str
     expires_at: datetime | None
+    role: str
+    permissions: dict
 
 
 class InviteListResponse(BaseModel):
     id: str
     code: str
+    role: str
+    permissions: dict
     created_at: datetime
     expires_at: datetime | None
     model_config = ConfigDict(from_attributes=True)

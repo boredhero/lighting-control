@@ -83,5 +83,7 @@ class InviteCode(Base):
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    role: Mapped[str] = mapped_column(String(16), default="user", nullable=False)
+    permissions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     used_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
