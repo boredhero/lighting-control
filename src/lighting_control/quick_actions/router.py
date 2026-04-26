@@ -5,8 +5,17 @@ from lighting_control.auth.dependencies import get_current_user, require_permiss
 from lighting_control.auth.models import User
 from lighting_control.db.engine import get_session
 from lighting_control.devices.discovery import control_device
-from lighting_control.devices.service import get_device, resolve_device_ids
+from lighting_control.devices.service import get_device, resolve_device_ids, update_device_state
+from lighting_control.devices.state_validator import validate_control_state
 from lighting_control.quick_actions import schemas, service
+
+
+def _validate_targets_or_raise(targets: list) -> None:
+    for i, t in enumerate(targets):
+        try:
+            validate_control_state(t.state)
+        except HTTPException as exc:
+            raise HTTPException(status_code=422, detail=f"target[{i}] state invalid: {exc.detail}")
 
 router = APIRouter(prefix="/quick-actions", tags=["quick-actions"])
 
@@ -26,6 +35,7 @@ async def get_quick_action(qa_id: str, user: User = Depends(get_current_user), d
 
 @router.post("", response_model=schemas.QuickActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_quick_action(req: schemas.QuickActionCreateRequest, user: User = Depends(require_permission("can_manage_quick_actions")), db: AsyncSession = Depends(get_session)):
+    _validate_targets_or_raise(req.targets)
     qa = await service.create_quick_action(db, req.name, req.icon, [t.model_dump() for t in req.targets], user.id)
     await db.commit()
     return qa
@@ -33,6 +43,7 @@ async def create_quick_action(req: schemas.QuickActionCreateRequest, user: User 
 
 @router.put("/{qa_id}", response_model=schemas.QuickActionResponse)
 async def update_quick_action(qa_id: str, req: schemas.QuickActionUpdateRequest, user: User = Depends(require_permission("can_manage_quick_actions")), db: AsyncSession = Depends(get_session)):
+    _validate_targets_or_raise(req.targets)
     qa = await service.update_quick_action(db, qa_id, req.name, req.icon, [t.model_dump() for t in req.targets])
     if not qa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quick action not found")
@@ -52,16 +63,33 @@ async def execute_quick_action(qa_id: str, user: User = Depends(require_permissi
     qa = await service.get_quick_action(db, qa_id)
     if not qa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quick action not found")
-    results = {}
-    for target in qa.targets:
+    results: dict[str, bool] = {}
+    failures: list[dict] = []
+    for ti, target in enumerate(qa.targets):
+        try:
+            state = validate_control_state(target.state)
+        except HTTPException as exc:
+            failures.append({"target_index": ti, "error": f"stored state invalid: {exc.detail}"})
+            continue
         device_ids = await resolve_device_ids(db, target.target_type.value, target.target_id, target.exclude_device_ids)
         for did in device_ids:
             device = await get_device(db, did)
-            if device:
-                result = await control_device(device.ip, target.state)
-                results[did] = result is not None
+            if not device:
+                continue
+            try:
+                result = await control_device(device.ip, dict(state))
+            except Exception as e:
+                results[did] = False
+                failures.append({"target_index": ti, "device_id": did, "error": str(e)})
+                continue
+            if result is None:
+                results[did] = False
+                failures.append({"target_index": ti, "device_id": did, "error": "device did not respond"})
+            else:
+                await update_device_state(db, did, result)
+                results[did] = True
     await db.commit()
-    return {"executed": True, "results": results}
+    return {"executed": True, "results": results, "failures": failures}
 
 
 @router.put("/reorder", status_code=status.HTTP_204_NO_CONTENT)

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TargetSelector, type TargetConfig } from '@/components/TargetSelector'
-import { StateConfigurator } from '@/components/StateConfigurator'
+import { LightingStateControl } from '@/components/LightingStateControl'
 import { toast } from 'sonner'
 
 interface Props {
@@ -57,7 +57,7 @@ export function CreateQuickActionDialog({ open, onOpenChange }: Props) {
             {targets.map((t, i) => (
               <div key={i} className="flex flex-col gap-2">
                 <Label className="text-sm font-medium">Target {i + 1}: {t.target_type}{t.target_id ? ` (${t.target_id.slice(0, 8)}...)` : ''}</Label>
-                <StateConfigurator state={t.state} onChange={(s) => updateTargetState(i, s)} />
+                <LightingStateControl value={t.state} onChange={(s) => updateTargetState(i, s)} size="compact" />
               </div>
             ))}
             <div className="flex justify-between">
