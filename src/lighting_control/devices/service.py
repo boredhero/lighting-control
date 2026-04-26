@@ -197,89 +197,142 @@ async def delete_group(db: AsyncSession, group_id: str) -> bool:
     return False
 
 
-async def export_hierarchy(db: AsyncSession) -> dict:
-    """Export rooms, zones, groups, and device assignments as a MAC-based JSON structure."""
+async def export_devices_for_backup(db: AsyncSession) -> list[dict]:
+    """Export devices for backup. Includes UUID + MAC so the orchestrator can build an id_remap."""
+    devices = await get_all_devices(db)
+    return [{"id": d.id, "mac": d.mac, "name": d.name} for d in devices]
+
+
+async def import_devices_for_backup(db: AsyncSession, items: list[dict]) -> dict[str, str]:
+    """Import device names by MAC. Returns id_remap mapping backup device.id -> current device.id. Devices are physical: never created or deleted by backup."""
+    remap: dict[str, str] = {}
+    for item in items:
+        mac = item.get("mac")
+        backup_id = item.get("id")
+        if not mac:
+            continue
+        device = await get_device_by_mac(db, mac)
+        if not device:
+            continue
+        if "name" in item and item["name"]:
+            device.name = item["name"]
+        if backup_id:
+            remap[backup_id] = device.id
+    await db.flush()
+    return remap
+
+
+async def export_hierarchy_for_backup(db: AsyncSession) -> dict:
+    """Export rooms, zones, groups for backup. Includes UUIDs so orchestrator can build id_remap."""
     rooms = await db.execute(select(Room).options(selectinload(Room.zones).selectinload(Zone.devices), selectinload(Room.devices)).order_by(Room.sort_order))
     rooms_data = []
     for room in rooms.scalars().unique().all():
         zones_data = []
         for zone in sorted(room.zones, key=lambda z: z.sort_order):
-            zones_data.append({"name": zone.name, "icon": zone.icon, "device_macs": [d.mac for d in zone.devices]})
+            zones_data.append({"id": zone.id, "name": zone.name, "icon": zone.icon, "sort_order": zone.sort_order, "device_macs": [d.mac for d in zone.devices]})
         unzoned_macs = [d.mac for d in room.devices if d.zone_id is None]
-        rooms_data.append({"name": room.name, "icon": room.icon, "zones": zones_data, "device_macs": unzoned_macs})
+        rooms_data.append({"id": room.id, "name": room.name, "icon": room.icon, "sort_order": room.sort_order, "zones": zones_data, "device_macs": unzoned_macs})
     groups = await get_all_groups(db)
     all_devices = await get_all_devices(db)
     device_map = {d.id: d.mac for d in all_devices}
-    groups_data = [{"name": g.name, "icon": g.icon, "device_macs": [device_map[gd.device_id] for gd in g.group_devices if gd.device_id in device_map]} for g in groups]
+    groups_data = [{"id": g.id, "name": g.name, "icon": g.icon, "sort_order": g.sort_order, "device_macs": [device_map[gd.device_id] for gd in g.group_devices if gd.device_id in device_map]} for g in groups]
     return {"rooms": rooms_data, "groups": groups_data}
 
 
-async def import_hierarchy(db: AsyncSession, data: dict) -> dict:
-    """Restore rooms, zones, groups, and device assignments from an exported JSON structure. Returns summary counts."""
+async def import_hierarchy_for_backup(db: AsyncSession, data: dict, mode: str) -> dict[str, str]:
+    """Import rooms, zones, groups. mode in {merge, replace}. Returns id_remap: backup UUID -> current UUID."""
+    if mode == "replace":
+        existing_groups = await get_all_groups(db)
+        for g in existing_groups:
+            await db.delete(g)
+        await db.flush()
+        all_zones = await get_all_zones(db)
+        for z in all_zones:
+            await db.delete(z)
+        await db.flush()
+        all_rooms = await get_all_rooms(db)
+        for r in all_rooms:
+            await db.delete(r)
+        await db.flush()
+        all_devices = await get_all_devices(db)
+        for d in all_devices:
+            d.room_id = None
+            d.zone_id = None
+        await db.flush()
     all_devices = await get_all_devices(db)
     mac_to_device = {d.mac: d for d in all_devices}
-    rooms_created = 0
-    rooms_updated = 0
-    zones_created = 0
-    zones_updated = 0
-    groups_created = 0
-    groups_updated = 0
-    devices_assigned = 0
+    remap: dict[str, str] = {}
     for room_data in data.get("rooms", []):
-        existing_rooms = await db.execute(select(Room).where(Room.name == room_data["name"]))
-        room = existing_rooms.scalar_one_or_none()
+        room = None
+        if mode == "merge":
+            existing = await db.execute(select(Room).where(Room.name == room_data["name"]))
+            room = existing.scalar_one_or_none()
         if room:
             room.icon = room_data.get("icon")
-            rooms_updated += 1
+            room.sort_order = room_data.get("sort_order", 0)
         else:
-            room = Room(name=room_data["name"], icon=room_data.get("icon"))
+            kwargs = {"name": room_data["name"], "icon": room_data.get("icon"), "sort_order": room_data.get("sort_order", 0)}
+            if room_data.get("id"):
+                kwargs["id"] = room_data["id"]
+            room = Room(**kwargs)
             db.add(room)
             await db.flush()
-            rooms_created += 1
+        if room_data.get("id"):
+            remap[room_data["id"]] = room.id
         for mac in room_data.get("device_macs", []):
             device = mac_to_device.get(mac)
             if device:
                 device.room_id = room.id
                 device.zone_id = None
-                devices_assigned += 1
         for zone_data in room_data.get("zones", []):
-            existing_zones = await db.execute(select(Zone).where(Zone.name == zone_data["name"], Zone.room_id == room.id))
-            zone = existing_zones.scalar_one_or_none()
+            zone = None
+            if mode == "merge":
+                existing = await db.execute(select(Zone).where(Zone.name == zone_data["name"], Zone.room_id == room.id))
+                zone = existing.scalar_one_or_none()
             if zone:
                 zone.icon = zone_data.get("icon")
-                zones_updated += 1
+                zone.sort_order = zone_data.get("sort_order", 0)
             else:
-                zone = Zone(name=zone_data["name"], room_id=room.id, icon=zone_data.get("icon"))
+                kwargs = {"name": zone_data["name"], "room_id": room.id, "icon": zone_data.get("icon"), "sort_order": zone_data.get("sort_order", 0)}
+                if zone_data.get("id"):
+                    kwargs["id"] = zone_data["id"]
+                zone = Zone(**kwargs)
                 db.add(zone)
                 await db.flush()
-                zones_created += 1
+            if zone_data.get("id"):
+                remap[zone_data["id"]] = zone.id
             for mac in zone_data.get("device_macs", []):
                 device = mac_to_device.get(mac)
                 if device:
                     device.room_id = room.id
                     device.zone_id = zone.id
-                    devices_assigned += 1
     for group_data in data.get("groups", []):
-        existing_groups = await db.execute(select(Group).options(selectinload(Group.group_devices)).where(Group.name == group_data["name"]))
-        group = existing_groups.scalar_one_or_none()
+        group = None
+        if mode == "merge":
+            existing = await db.execute(select(Group).options(selectinload(Group.group_devices)).where(Group.name == group_data["name"]))
+            group = existing.scalar_one_or_none()
         if group:
             group.icon = group_data.get("icon")
-            for gd in group.group_devices:
+            group.sort_order = group_data.get("sort_order", 0)
+            for gd in list(group.group_devices):
                 await db.delete(gd)
             await db.flush()
-            groups_updated += 1
         else:
-            group = Group(name=group_data["name"], icon=group_data.get("icon"))
+            kwargs = {"name": group_data["name"], "icon": group_data.get("icon"), "sort_order": group_data.get("sort_order", 0)}
+            if group_data.get("id"):
+                kwargs["id"] = group_data["id"]
+            group = Group(**kwargs)
             db.add(group)
             await db.flush()
-            groups_created += 1
+        if group_data.get("id"):
+            remap[group_data["id"]] = group.id
         for mac in group_data.get("device_macs", []):
             device = mac_to_device.get(mac)
             if device:
                 gd = GroupDevice(group_id=group.id, device_id=device.id)
                 db.add(gd)
     await db.flush()
-    return {"rooms_created": rooms_created, "rooms_updated": rooms_updated, "zones_created": zones_created, "zones_updated": zones_updated, "groups_created": groups_created, "groups_updated": groups_updated, "devices_assigned": devices_assigned}
+    return remap
 
 
 async def resolve_device_ids(db: AsyncSession, target_type: str, target_id: str | None, exclude_device_ids: list[str] | None = None) -> list[str]:

@@ -16,6 +16,7 @@ from lighting_control.scenes.router import router as scenes_router
 from lighting_control.quick_actions.router import router as qa_router
 from lighting_control.schedules.router import router as schedules_router, settings_router
 from lighting_control.notifications.router import router as notifications_router
+from lighting_control.backup.router import router as backup_router
 from lighting_control.websocket.router import router as ws_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
@@ -59,7 +60,7 @@ def create_app() -> FastAPI:
         if request.url.path.startswith("/api"):
             logger.info(f"{request.method} {request.url.path} {response.status_code} {duration_ms:.1f}ms")
         return response
-    for r in [auth_router, devices_router, rooms_router, zones_router, groups_router, scenes_router, qa_router, schedules_router, settings_router, notifications_router]:
+    for r in [auth_router, devices_router, rooms_router, zones_router, groups_router, scenes_router, qa_router, schedules_router, settings_router, notifications_router, backup_router]:
         application.include_router(r, prefix="/api")
     application.include_router(ws_router)
     @application.get("/api/health")

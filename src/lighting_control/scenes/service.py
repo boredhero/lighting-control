@@ -41,3 +41,42 @@ async def delete_custom_scene(db: AsyncSession, scene_id: str) -> bool:
         await db.flush()
         return True
     return False
+
+
+async def export_scenes(db: AsyncSession) -> list[dict]:
+    """Export custom scenes for backup."""
+    scenes = await get_all_custom_scenes(db)
+    return [{"id": s.id, "name": s.name, "color_r": s.color_r, "color_g": s.color_g, "color_b": s.color_b, "color_temp": s.color_temp, "brightness": s.brightness} for s in scenes]
+
+
+async def import_scenes(db: AsyncSession, items: list[dict], mode: str, created_by: str) -> dict:
+    """Import custom scenes. mode in {merge, replace}."""
+    if mode == "replace":
+        existing = await get_all_custom_scenes(db)
+        for s in existing:
+            await db.delete(s)
+        await db.flush()
+    created = 0
+    updated = 0
+    for item in items:
+        backup_id = item.get("id")
+        existing = None
+        if mode == "merge" and backup_id:
+            existing = await get_custom_scene(db, backup_id)
+        if existing:
+            existing.name = item["name"]
+            existing.color_r = item.get("color_r")
+            existing.color_g = item.get("color_g")
+            existing.color_b = item.get("color_b")
+            existing.color_temp = item.get("color_temp")
+            existing.brightness = item.get("brightness", 100)
+            updated += 1
+        else:
+            kwargs = {"name": item["name"], "color_r": item.get("color_r"), "color_g": item.get("color_g"), "color_b": item.get("color_b"), "color_temp": item.get("color_temp"), "brightness": item.get("brightness", 100), "created_by": created_by}
+            if backup_id:
+                kwargs["id"] = backup_id
+            scene = CustomScene(**kwargs)
+            db.add(scene)
+            created += 1
+    await db.flush()
+    return {"created": created, "updated": updated}

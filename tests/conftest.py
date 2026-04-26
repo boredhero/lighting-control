@@ -111,6 +111,22 @@ async def one_group(test_db: AsyncSession) -> Group:
 
 
 @pytest_asyncio.fixture
+async def app_client(test_db: AsyncSession):
+    """FastAPI httpx AsyncClient with the DB session overridden to test_db. Yields (client, app) so tests can override get_current_user per-case."""
+    from httpx import ASGITransport, AsyncClient
+    from lighting_control.main import create_app
+    from lighting_control.db.engine import get_session
+    app = create_app()
+    async def _override_session():
+        yield test_db
+    app.dependency_overrides[get_session] = _override_session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, app
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
 async def sample_devices(test_db: AsyncSession, two_rooms: tuple[Room, Room], one_zone: Zone, one_group: Group) -> list[Device]:
     """5 devices across 2 rooms, 1 zone, 1 group."""
     r1, r2 = two_rooms
