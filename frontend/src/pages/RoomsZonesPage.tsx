@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
+import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight, Pencil, Sliders } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getDevicePalette } from '@/lib/devicePalette'
 
@@ -179,6 +180,7 @@ function EditHierarchyDialog({ open, onOpenChange, target, hierarchy }: { open: 
 }
 
 export function RoomsZonesPage() {
+  const navigate = useNavigate()
   const [createType, setCreateType] = useState<'room' | 'zone' | 'group' | null>(null)
   const [addDeviceTo, setAddDeviceTo] = useState<{ type: 'room' | 'zone' | 'group'; id: string; name: string } | null>(null)
   const [editTarget, setEditTarget] = useState<{ type: 'room' | 'zone' | 'group'; id: string; name: string; icon: string | null } | null>(null)
@@ -233,7 +235,8 @@ export function RoomsZonesPage() {
                     <RoomIcon icon={room.icon} />
                     <span className="font-medium flex-1">{room.name}</span>
                     <span className="text-xs 3xl:text-sm text-muted-foreground">{totalDevices} device(s), {room.zones.length} zone(s)</span>
-                    <Button variant="ghost" size="icon" className="ml-2 tv:size-12" onClick={(e) => { e.stopPropagation(); setAddDeviceTo({ type: 'room', id: room.id, name: room.name }) }}><Plus className="size-[14px] tv:size-6" /></Button>
+                    <Button variant="ghost" size="icon" className="ml-2 tv:size-12" onClick={(e) => { e.stopPropagation(); navigate(`/rooms/${room.id}`) }} title="Control lights"><Sliders className="size-[14px] tv:size-6" /></Button>
+                    <Button variant="ghost" size="icon" className="tv:size-12" onClick={(e) => { e.stopPropagation(); setAddDeviceTo({ type: 'room', id: room.id, name: room.name }) }}><Plus className="size-[14px] tv:size-6" /></Button>
                     <Button variant="ghost" size="icon" className="tv:size-12" onClick={(e) => { e.stopPropagation(); setEditTarget({ type: 'room', id: room.id, name: room.name, icon: room.icon }) }}><Pencil className="size-[14px] tv:size-6" /></Button>
                     <Button variant="ghost" size="icon" className="tv:size-12" onClick={(e) => { e.stopPropagation(); deleteRoomMutation.mutate(room.id) }}><Trash2 className="size-[14px] tv:size-6 text-destructive" /></Button>
                   </button>
@@ -245,6 +248,7 @@ export function RoomsZonesPage() {
                             <ZoneIcon icon={zone.icon} />
                             <span className="text-sm font-medium">{zone.name}</span>
                             <span className="text-xs text-muted-foreground">{zone.devices.length} device(s)</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigate(`/zones/${zone.id}`)} title="Control lights"><Sliders size={12} /></Button>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddDeviceTo({ type: 'zone', id: zone.id, name: zone.name })}><Plus size={12} /></Button>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditTarget({ type: 'zone', id: zone.id, name: zone.name, icon: zone.icon })}><Pencil size={12} /></Button>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteZoneMutation.mutate(zone.id)}><Trash2 size={12} className="text-destructive" /></Button>
@@ -280,6 +284,7 @@ export function RoomsZonesPage() {
                   <GroupIcon icon={group.icon} />
                   <span className="font-medium flex-1">{group.name}</span>
                   <span className="text-xs text-muted-foreground">{group.device_ids.length} device(s)</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/groups/${group.id}`)} title="Control lights"><Sliders size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAddDeviceTo({ type: 'group', id: group.id, name: group.name })}><Plus size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditTarget({ type: 'group', id: group.id, name: group.name, icon: group.icon })}><Pencil size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteGroupMutation.mutate(group.id)}><Trash2 size={14} className="text-destructive" /></Button>

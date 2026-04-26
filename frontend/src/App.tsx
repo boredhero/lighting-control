@@ -11,6 +11,7 @@ import { DeviceDetailPage } from '@/pages/DeviceDetailPage'
 import { QuickActionsPage } from '@/pages/QuickActionsPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { RoomsZonesPage } from '@/pages/RoomsZonesPage'
+import { HierarchyDetailPage } from '@/pages/HierarchyDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import type { ReactNode } from 'react'
@@ -39,6 +40,9 @@ export default function App() {
           <Route path="/quick-actions" element={<ProtectedRoute><QuickActionsPage /></ProtectedRoute>} />
           <Route path="/schedules" element={<ProtectedRoute><SchedulesPage /></ProtectedRoute>} />
           <Route path="/rooms-zones" element={<ProtectedRoute><RoomsZonesPage /></ProtectedRoute>} />
+          <Route path="/rooms/:id" element={<ProtectedRoute><HierarchyDetailPage kind="room" /></ProtectedRoute>} />
+          <Route path="/zones/:id" element={<ProtectedRoute><HierarchyDetailPage kind="zone" /></ProtectedRoute>} />
+          <Route path="/groups/:id" element={<ProtectedRoute><HierarchyDetailPage kind="group" /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>

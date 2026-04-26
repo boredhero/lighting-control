@@ -1,4 +1,5 @@
 """Device management API endpoints."""
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,9 @@ from lighting_control.auth.dependencies import get_current_user, require_permiss
 from lighting_control.auth.models import User
 from lighting_control.db.engine import get_session
 from lighting_control.devices import schemas, service, discovery
+from lighting_control.devices.state_validator import validate_control_state
+
+_BULK_CONCURRENCY = 32
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 rooms_router = APIRouter(prefix="/rooms", tags=["rooms"])
@@ -47,16 +51,40 @@ async def get_hierarchy(user: User = Depends(get_current_user), db: AsyncSession
 
 @router.post("/bulk-control", response_model=dict)
 async def bulk_control(req: schemas.BulkControlRequest, user: User = Depends(require_permission("can_control_devices")), db: AsyncSession = Depends(get_session)):
-    results = {}
-    for did in req.device_ids:
-        device = await service.get_device(db, did)
-        if device:
-            result = await discovery.control_device(device.ip, req.state)
-            if result:
-                await service.update_device_state(db, did, result)
-            results[did] = result is not None
+    state = validate_control_state(req.state)
+    if req.device_ids is not None and req.target_type is not None:
+        raise HTTPException(status_code=422, detail="specify either device_ids or target_type, not both")
+    if req.device_ids is not None:
+        device_ids = req.device_ids
+    elif req.target_type is not None:
+        device_ids = await service.resolve_device_ids(db, req.target_type, req.target_id, req.exclude_device_ids)
+    else:
+        raise HTTPException(status_code=422, detail="must provide either device_ids or target_type")
+    devices_list = []
+    for did in device_ids:
+        d = await service.get_device(db, did)
+        if d:
+            devices_list.append(d)
+    sem = asyncio.Semaphore(_BULK_CONCURRENCY)
+    async def _control_one(d):
+        async with sem:
+            try:
+                return d, await discovery.control_device(d.ip, dict(state)), None
+            except Exception as e:
+                return d, None, str(e)
+    outcomes = await asyncio.gather(*[_control_one(d) for d in devices_list])
+    success_count = 0
+    failures: list[dict] = []
+    for d, result, err in outcomes:
+        if err is not None:
+            failures.append({"device_id": d.id, "error": err})
+        elif result is None:
+            failures.append({"device_id": d.id, "error": "device did not respond"})
+        else:
+            await service.update_device_state(db, d.id, result)
+            success_count += 1
     await db.commit()
-    return {"results": results}
+    return {"success_count": success_count, "failure_count": len(failures), "failures": failures}
 
 
 @router.post("/discover", response_model=dict)

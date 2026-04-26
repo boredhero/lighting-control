@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TargetSelector, type TargetConfig } from '@/components/TargetSelector'
-import { StateConfigurator } from '@/components/StateConfigurator'
+import { LightingStateControl } from '@/components/LightingStateControl'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -136,7 +136,7 @@ export function CreateScheduleDialog({ open, onOpenChange }: Props) {
             {targets.map((t, i) => (
               <div key={i} className="flex flex-col gap-2">
                 <Label className="text-sm font-medium">Target {i + 1}: {t.target_type}</Label>
-                <StateConfigurator state={t.state} onChange={(s) => updateTargetState(i, s)} />
+                <LightingStateControl value={t.state} onChange={(s) => updateTargetState(i, s)} size="compact" />
               </div>
             ))}
             <div className="flex justify-between"><Button variant="outline" onClick={() => setStep('targets')}>Back</Button><Button onClick={() => setStep('review')}>Review</Button></div>

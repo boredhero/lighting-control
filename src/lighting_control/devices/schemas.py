@@ -26,7 +26,10 @@ class DeviceControlRequest(BaseModel):
 
 
 class BulkControlRequest(BaseModel):
-    device_ids: list[str]
+    device_ids: list[str] | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+    exclude_device_ids: list[str] | None = None
     state: dict
 
 
