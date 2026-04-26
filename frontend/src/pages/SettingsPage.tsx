@@ -14,6 +14,7 @@ import { CreateGuestDialog } from '@/components/CreateGuestDialog'
 import { InviteLinkDialog } from '@/components/InviteLinkDialog'
 import { EditUserDialog } from '@/components/EditUserDialog'
 import { CreateRoleDialog } from '@/components/CreateRoleDialog'
+import { BackupSection } from '@/components/BackupSection'
 
 interface UserItem { id: string; username: string; role_id: string | null; is_admin: boolean; is_guest: boolean; guest_expires_at: string | null; totp_enabled: boolean; permissions: Record<string, boolean>; created_at: string }
 interface InviteItem { id: string; code: string; role_id: string; created_at: string; expires_at: string | null }
@@ -127,6 +128,7 @@ export function SettingsPage() {
           </Card>
         </>
       )}
+      {(user?.is_admin || user?.permissions?.can_manage_devices) && <BackupSection />}
       <Button variant="destructive" onClick={handleLogout} className="w-full">Sign Out</Button>
       <TOTPSetupDialog open={totpOpen} onOpenChange={setTotpOpen} />
       <CreateGuestDialog open={guestOpen} onOpenChange={setGuestOpen} />
