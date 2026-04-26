@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { HexColorPicker } from 'react-colorful'
 import { formatMac } from '@/lib/utils'
+import { getDevicePalette } from '@/lib/devicePalette'
 import { toast } from 'sonner'
 import { useState, useEffect, useRef } from 'react'
 
@@ -55,12 +56,15 @@ export function DeviceDetailPage() {
   const handleColorTemp = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setColorTemp(v); if (tempTimer.current) clearTimeout(tempTimer.current); tempTimer.current = setTimeout(() => { controlMutation.mutate({ temp: v, dimming: brightness }) }, 300) }
   const isOn = device.last_state?.state !== false
   const handleToggle = () => { controlMutation.mutate(isOn ? { turn_off: true } : { dimming: brightness }) }
-  const deviceColor = device.last_state && typeof device.last_state.r === 'number' ? rgbToHex(device.last_state.r as number, device.last_state.g as number, device.last_state.b as number) : null
+  const palette = getDevicePalette(device, 'card')
+  const cardStyle = palette ? { backgroundColor: palette.bg, borderColor: palette.border } : undefined
+  const cardClass = palette ? 'border' : 'bg-[var(--surface-1)] border-border'
+  const iconHaloStyle = palette ? { backgroundColor: palette.iconBg, color: palette.iconFg } : { backgroundColor: 'var(--surface-3)', color: 'var(--text-disabled)' }
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="rounded-full p-3" style={{ backgroundColor: isOn && deviceColor ? `${deviceColor}30` : 'var(--surface-3)', color: isOn && deviceColor ? deviceColor : 'var(--text-disabled)' }}><Lightbulb size={28} /></div>
+          <div className="rounded-full p-3" style={iconHaloStyle}><Lightbulb size={28} /></div>
           <div>
             {editing ? (
               <div className="flex items-center gap-2">
@@ -76,7 +80,7 @@ export function DeviceDetailPage() {
         </div>
         <Button variant={isOn ? 'default' : 'outline'} size="icon" onClick={handleToggle}><Power size={20} /></Button>
       </div>
-      <Card className="bg-[var(--surface-1)] border-border">
+      <Card className={cardClass} style={cardStyle}>
         <CardContent className="p-4">
           <Tabs defaultValue={device.last_state?.temp ? 'temp' : 'color'}>
             <TabsList className="mb-4"><TabsTrigger value="color"><Palette size={14} className="mr-1" />Color</TabsTrigger><TabsTrigger value="temp"><Thermometer size={14} className="mr-1" />Temperature</TabsTrigger></TabsList>
@@ -91,7 +95,7 @@ export function DeviceDetailPage() {
           </Tabs>
         </CardContent>
       </Card>
-      <Card className="bg-[var(--surface-1)] border-border">
+      <Card className={cardClass} style={cardStyle}>
         <CardHeader><CardTitle>Brightness</CardTitle></CardHeader>
         <CardContent className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground w-8">0%</span>
@@ -99,7 +103,7 @@ export function DeviceDetailPage() {
           <span className="text-sm font-medium w-10 text-right">{brightness}%</span>
         </CardContent>
       </Card>
-      <Card className="bg-[var(--surface-1)] border-border">
+      <Card className={cardClass} style={cardStyle}>
         <CardHeader><CardTitle>Device Info</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-2 text-sm">
           <span className="text-muted-foreground">MAC</span><span className="font-mono">{formatMac(device.mac)}</span>
