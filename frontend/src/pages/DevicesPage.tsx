@@ -37,7 +37,7 @@ export function DevicesPage() {
           <Button onClick={() => discoverMutation.mutate()} disabled={discoverMutation.isPending} className="tv:h-12 tv:text-lg tv:px-6"><Radar className="size-4 3xl:size-5 tv:size-6 mr-2" />{discoverMutation.isPending ? 'Scanning...' : 'Scan Network'}</Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-7 tv:grid-cols-8 gap-3 3xl:gap-4 tv:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-5 tv:grid-cols-6 gap-3 3xl:gap-5 tv:gap-7 auto-rows-fr">
           {filtered.map((device, index) => {
             const palette = getDevicePalette(device, 'card')
             const brightness = getDeviceBrightness(device)
@@ -54,16 +54,19 @@ export function DevicesPage() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.22, delay: Math.min(index * 0.018, 0.35), ease: 'easeOut' }}
+                className="h-full"
               >
-                <Link to={`/devices/${device.id}`} className="block">
-                  <Card className={isOff ? 'bg-[var(--surface-1)] border-border cursor-pointer' : 'border cursor-pointer'} style={cardStyle}>
-                    <CardContent className="flex items-center gap-3 3xl:gap-4 tv:gap-6 p-4 3xl:p-5 tv:p-7">
-                      <div className="rounded-full p-2 3xl:p-3 tv:p-4 shrink-0" style={iconStyle}><Lightbulb className="size-5 3xl:size-6 tv:size-9" /></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{device.name}</p>
-                        <p className="text-xs truncate" style={{ color: palette ? palette.iconFg : 'var(--text-secondary)', opacity: palette ? 0.85 : 1 }}>{device.ip}{brightness !== null ? ` · ${brightness}%` : ''}</p>
+                <Link to={`/devices/${device.id}`} className="block h-full">
+                  <Card className={`h-full ${isOff ? 'bg-[var(--surface-1)] border-border cursor-pointer' : 'border cursor-pointer'}`} style={cardStyle}>
+                    <CardContent className="flex flex-col h-full gap-3 3xl:gap-5 tv:gap-7 p-5 3xl:p-7 tv:p-10 min-h-[8.5rem] 3xl:min-h-[12rem] 4xl:min-h-[14rem] tv:min-h-[18rem]">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="rounded-full p-2.5 3xl:p-3.5 tv:p-5 shrink-0" style={iconStyle}><Lightbulb className="size-5 3xl:size-7 tv:size-12" /></div>
+                        <span className="inline-flex h-5 3xl:h-7 tv:h-9 items-center rounded-full px-2 3xl:px-3 tv:px-4 text-xs 3xl:text-sm tv:text-base font-medium shrink-0" style={pillStyle}>{isOff ? 'Off' : 'Online'}</span>
                       </div>
-                      <span className="inline-flex h-5 3xl:h-6 tv:h-8 items-center rounded-full px-2 3xl:px-3 tv:px-4 text-xs font-medium shrink-0" style={pillStyle}>{isOff ? 'Off' : 'Online'}</span>
+                      <div className="flex-1 flex flex-col justify-end min-w-0">
+                        <p className="font-semibold text-base 3xl:text-xl tv:text-3xl leading-tight tracking-tight break-words line-clamp-2">{device.name}</p>
+                        <p className="text-xs 3xl:text-sm tv:text-lg mt-1.5 3xl:mt-2 tv:mt-3 truncate" style={{ color: palette ? palette.iconFg : 'var(--text-secondary)', opacity: palette ? 0.85 : 1 }}>{device.ip}{brightness !== null ? ` · ${brightness}%` : ''}</p>
+                      </div>
                     </CardContent>
                   </Card>
                 </Link>
