@@ -87,29 +87,29 @@ export function BackupSection() {
   }
   return (
     <>
-      <Card className="bg-[var(--surface-1)] border-border">
-        <CardHeader><CardTitle className="flex items-center gap-2"><Archive size={18} />Backup & Restore</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">Download a single JSON file containing your devices, rooms, zones, groups, schedules, quick actions, and custom scenes. Use it to restore later or migrate to a new install. Auth and per-user secrets are not included.</p>
+      <Card className="bg-[var(--surface-1)] border-border 3xl:py-6 tv:py-10 3xl:gap-6 tv:gap-10">
+        <CardHeader className="3xl:px-6 tv:px-10"><CardTitle className="flex items-center gap-2 3xl:gap-3 3xl:text-xl tv:text-3xl"><Archive className="size-[18px] 3xl:size-6 tv:size-9" />Backup & Restore</CardTitle></CardHeader>
+        <CardContent className="space-y-4 3xl:space-y-6 tv:space-y-10 3xl:px-6 tv:px-10">
+          <p className="text-sm 3xl:text-base tv:text-2xl text-muted-foreground leading-relaxed">Download a single JSON file containing your devices, rooms, zones, groups, schedules, quick actions, and custom scenes. Use it to restore later or migrate to a new install. Auth and per-user secrets are not included.</p>
           <div>
-            <h3 className="text-sm font-medium mb-2">Backup</h3>
-            <Button variant="outline" size="sm" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}><Download size={14} className="mr-2" />{exportMutation.isPending ? 'Preparing...' : 'Download backup.json'}</Button>
+            <h3 className="text-sm 3xl:text-base tv:text-xl font-medium mb-2 3xl:mb-3 tv:mb-5">Backup</h3>
+            <Button variant="outline" size="sm" className="3xl:h-10 tv:h-14 3xl:text-base tv:text-xl 3xl:px-4 tv:px-7" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}><Download className="size-[14px] 3xl:size-5 tv:size-6 mr-2" />{exportMutation.isPending ? 'Preparing...' : 'Download backup.json'}</Button>
           </div>
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Restore</h3>
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="space-y-2 3xl:space-y-3 tv:space-y-5">
+            <h3 className="text-sm 3xl:text-base tv:text-xl font-medium">Restore</h3>
+            <div className="flex flex-wrap items-center gap-2 3xl:gap-3">
               <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleFileChange} className="hidden" />
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}><Upload size={14} className="mr-2" />{selectedFile ? selectedFile.name : 'Choose file...'}</Button>
+              <Button variant="outline" size="sm" className="3xl:h-10 tv:h-14 3xl:text-base tv:text-xl 3xl:px-4 tv:px-7" onClick={() => fileInputRef.current?.click()}><Upload className="size-[14px] 3xl:size-5 tv:size-6 mr-2" />{selectedFile ? selectedFile.name : 'Choose file...'}</Button>
               <Select value={mode} onValueChange={(v) => setMode(v as 'merge' | 'replace')}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-36 3xl:w-44 3xl:h-10 tv:w-56 tv:h-14 3xl:text-base tv:text-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="merge">Merge</SelectItem>
                   <SelectItem value="replace">Replace</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="sm" onClick={beginRestore} disabled={!selectedFile || importMutation.isPending}>{importMutation.isPending ? 'Restoring...' : 'Restore'}</Button>
+              <Button size="sm" className="3xl:h-10 tv:h-14 3xl:text-base tv:text-xl 3xl:px-4 tv:px-7" onClick={beginRestore} disabled={!selectedFile || importMutation.isPending}>{importMutation.isPending ? 'Restoring...' : 'Restore'}</Button>
             </div>
-            <p className="text-xs text-muted-foreground">{mode === 'merge' ? 'Merge: adds new items, updates existing items by ID/name. Never deletes.' : 'Replace: deletes all existing schedules, quick actions, scenes, rooms, zones, and groups before importing. Devices are preserved (physical hardware).'}</p>
+            <p className="text-xs 3xl:text-sm tv:text-lg text-muted-foreground leading-relaxed">{mode === 'merge' ? 'Merge: adds new items, updates existing items by ID/name. Never deletes.' : 'Replace: deletes all existing schedules, quick actions, scenes, rooms, zones, and groups before importing. Devices are preserved (physical hardware).'}</p>
           </div>
         </CardContent>
       </Card>
