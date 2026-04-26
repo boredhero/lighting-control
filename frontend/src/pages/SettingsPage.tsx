@@ -39,8 +39,9 @@ export function SettingsPage() {
   const handleLogout = async () => { await logout(); navigate('/login') }
   const getRoleName = (roleId: string | null) => { const r = roles.find((role) => role.id === roleId); return r?.name ?? 'Unknown' }
   return (
-    <div className="space-y-6 3xl:space-y-8 tv:space-y-12 max-w-2xl 3xl:max-w-3xl tv:max-w-4xl mx-auto">
+    <div className="space-y-6 3xl:space-y-8 tv:space-y-12 max-w-2xl lg:max-w-7xl 3xl:max-w-[100rem] tv:max-w-[120rem] mx-auto">
       <h2 className="text-xl 3xl:text-2xl tv:text-4xl font-semibold tracking-tight">Settings</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 3xl:gap-8 items-start">
       <Card className="bg-[var(--surface-1)] border-border">
         <CardHeader><CardTitle className="flex items-center gap-2"><Shield size={18} />Account</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -129,7 +130,8 @@ export function SettingsPage() {
         </>
       )}
       {(user?.is_admin || user?.permissions?.can_manage_devices) && <BackupSection />}
-      <Button variant="destructive" onClick={handleLogout} className="w-full">Sign Out</Button>
+      </div>
+      <div className="flex justify-center"><Button variant="destructive" onClick={handleLogout} className="w-full lg:w-auto lg:px-16">Sign Out</Button></div>
       <TOTPSetupDialog open={totpOpen} onOpenChange={setTotpOpen} />
       <CreateGuestDialog open={guestOpen} onOpenChange={setGuestOpen} />
       <InviteLinkDialog open={inviteOpen} onOpenChange={setInviteOpen} />
