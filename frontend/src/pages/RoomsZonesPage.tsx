@@ -10,18 +10,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight, Download, Upload } from 'lucide-react'
 import { toast } from 'sonner'
+import { getDevicePalette } from '@/lib/devicePalette'
 
 interface HierarchyDevice { id: string; name: string; mac: string; ip: string; is_online: boolean; last_state: Record<string, unknown> | null }
 interface HierarchyZone { id: string; name: string; icon: string | null; devices: HierarchyDevice[] }
 interface HierarchyRoom { id: string; name: string; icon: string | null; zones: HierarchyZone[]; devices: HierarchyDevice[] }
 interface HierarchyGroup { id: string; name: string; icon: string | null; device_ids: string[] }
 interface Hierarchy { rooms: HierarchyRoom[]; unassigned: HierarchyDevice[]; groups: HierarchyGroup[] }
-interface AllDevice { id: string; name: string; mac: string; ip: string; is_online: boolean }
+interface AllDevice { id: string; name: string; mac: string; ip: string; is_online: boolean; last_state: Record<string, unknown> | null }
 interface Room { id: string; name: string }
 function DeviceChip({ device, onRemove }: { device: HierarchyDevice; onRemove?: () => void }) {
+  const palette = getDevicePalette(device, 'chip')
+  const chipStyle = palette ? { backgroundColor: palette.bg, color: palette.iconFg } : undefined
+  const iconStyle = palette ? { color: palette.iconFg } : undefined
+  const iconClass = palette ? '' : (device.is_online ? 'text-green-400' : 'text-muted-foreground')
   return (
-    <div className="flex items-center gap-2 px-2 py-1 bg-[var(--surface-3)] rounded text-sm">
-      <Lightbulb size={12} className={device.is_online ? 'text-green-400' : 'text-muted-foreground'} />
+    <div className={palette ? 'flex items-center gap-2 px-2 py-1 rounded text-sm' : 'flex items-center gap-2 px-2 py-1 bg-[var(--surface-3)] rounded text-sm'} style={chipStyle}>
+      <Lightbulb size={12} className={iconClass} style={iconStyle} />
       <span className="truncate">{device.name}</span>
       {onRemove && <button onClick={onRemove} className="text-muted-foreground hover:text-destructive"><Trash2 size={12} /></button>}
     </div>
@@ -211,7 +216,7 @@ export function RoomsZonesPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteGroupMutation.mutate(group.id)}><Trash2 size={14} className="text-destructive" /></Button>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {group.device_ids.map((did) => { const d = getDeviceById(did); return d ? <DeviceChip key={did} device={{ ...d, last_state: null }} onRemove={() => removeFromGroup(group.id, did)} /> : null })}
+                  {group.device_ids.map((did) => { const d = getDeviceById(did); return d ? <DeviceChip key={did} device={d} onRemove={() => removeFromGroup(group.id, did)} /> : null })}
                 </div>
               </CardContent>
             </Card>
