@@ -44,9 +44,9 @@ def create_refresh_token(user_id: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
 
-def create_partial_token(user_id: str) -> str:
+def create_partial_token(user_id: str, bridge_for: list[str] | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=5)
-    payload = {"sub": user_id, "exp": expire, "type": "partial"}
+    payload = {"sub": user_id, "exp": expire, "type": "partial", "bridge_for": list(bridge_for or [])}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGORITHM)
 
 

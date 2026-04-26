@@ -1,10 +1,11 @@
 """Auth API endpoints."""
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
+from lighting_control.auth import passkeys as passkey_service
 from lighting_control.auth import schemas, service, totp
 from lighting_control.auth.dependencies import get_current_user, require_admin
 from lighting_control.auth.models import User
@@ -12,6 +13,44 @@ from lighting_control.config import settings
 from lighting_control.db.engine import get_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+PASSKEY_COOKIE_NAME = "webauthn_session"
+PASSKEY_COOKIE_MAX_AGE = passkey_service.CHALLENGE_TTL_SECONDS
+
+
+def _set_passkey_cookie(response: Response, session_id: str) -> None:
+    response.set_cookie(
+        key=PASSKEY_COOKIE_NAME,
+        value=session_id,
+        max_age=PASSKEY_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=settings.WEBAUTHN_ORIGIN.startswith("https://"),
+        path="/api/auth",
+    )
+
+
+def _clear_passkey_cookie(response: Response) -> None:
+    response.delete_cookie(key=PASSKEY_COOKIE_NAME, path="/api/auth")
+
+
+def _passkey_error_to_http(err: passkey_service.PasskeyError) -> HTTPException:
+    code = str(err)
+    msg_map = {
+        "challenge_missing_or_expired": (status.HTTP_400_BAD_REQUEST, "Passkey session expired. Please try again."),
+        "wrong_challenge_kind": (status.HTTP_400_BAD_REQUEST, "Passkey session expired. Please try again."),
+        "challenge_user_mismatch": (status.HTTP_400_BAD_REQUEST, "Passkey session expired. Please try again."),
+        "verification_failed": (status.HTTP_400_BAD_REQUEST, "Could not verify the passkey response."),
+        "credential_already_registered": (status.HTTP_400_BAD_REQUEST, "Could not register this passkey. It may already be in use."),
+        "malformed_credential": (status.HTTP_400_BAD_REQUEST, "Malformed credential."),
+        "credential_not_found_or_revoked": (status.HTTP_401_UNAUTHORIZED, "Unknown or revoked passkey."),
+        "authenticator_integrity_warning": (status.HTTP_401_UNAUTHORIZED, "Authenticator integrity check failed. Please try again or contact your administrator."),
+        "authenticator_integrity_failed_revoked": (status.HTTP_401_UNAUTHORIZED, "This passkey has been disabled due to repeated integrity failures. Please re-register it."),
+        "requires_password_first": (status.HTTP_401_UNAUTHORIZED, "This passkey can only be used as a second factor. Please sign in with your password first."),
+        "user_mismatch": (status.HTTP_401_UNAUTHORIZED, "Passkey does not belong to the authenticating user."),
+    }
+    s, m = msg_map.get(code, (status.HTTP_400_BAD_REQUEST, "Passkey request failed."))
+    return HTTPException(status_code=s, detail=m)
 
 
 @router.get("/setup-status", response_model=schemas.SetupStatusResponse)
@@ -38,13 +77,21 @@ async def login(req: schemas.LoginRequest, db: AsyncSession = Depends(get_sessio
     if user.is_guest and user.guest_expires_at:
         if user.guest_expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Guest account expired")
+    available: list[str] = []
     if user.totp_enabled:
-        partial = service.create_partial_token(user.id)
-        return schemas.TokenResponse(access_token="", refresh_token="", requires_totp=True, partial_token=partial)
-    has_passkeys = len(user.passkeys) > 0 if user.passkeys else False
-    if has_passkeys:
-        partial = service.create_partial_token(user.id)
-        return schemas.TokenResponse(access_token="", refresh_token="", requires_passkey=True, partial_token=partial)
+        available.append("totp")
+    if user.passkeys and any(p.revoked_at is None for p in user.passkeys):
+        available.append("passkey")
+    if available:
+        partial = service.create_partial_token(user.id, bridge_for=available)
+        return schemas.TokenResponse(
+            access_token="",
+            refresh_token="",
+            requires_totp="totp" in available,
+            requires_passkey="passkey" in available,
+            available_second_factors=available,
+            partial_token=partial,
+        )
     access = service.create_access_token(user.id, user.is_admin, user.permissions)
     refresh = service.create_refresh_token(user.id)
     await service.create_session(db, user.id, access, refresh)
@@ -60,6 +107,9 @@ async def login_totp(req: schemas.TOTPVerifyRequest, db: AsyncSession = Depends(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid partial token")
     if payload.get("type") != "partial":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+    bridge_for = payload.get("bridge_for") or []
+    if bridge_for and "totp" not in bridge_for:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not valid for TOTP login")
     user = await service.get_user_by_id(db, payload["sub"])
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
@@ -279,12 +329,97 @@ async def debug_totp(req: schemas.TOTPEnableRequest, user: User = Depends(get_cu
 
 @router.get("/me/passkeys", response_model=list[schemas.PasskeyResponse])
 async def list_passkeys(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    passkeys = await service.get_user_passkeys(db, user.id)
-    return passkeys
+    return await passkey_service.list_user_passkeys(db, user.id)
+
+
+@router.patch("/me/passkeys/{passkey_id}", response_model=schemas.PasskeyResponse)
+async def rename_passkey(passkey_id: str, req: schemas.PasskeyRenameRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    passkey = await passkey_service.rename_passkey(db, passkey_id, user.id, req.name)
+    if passkey is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Passkey not found")
+    await db.commit()
+    return passkey
 
 
 @router.delete("/me/passkeys/{passkey_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_passkey(passkey_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    if not await service.delete_passkey(db, passkey_id, user.id):
+    if not await passkey_service.soft_revoke_passkey(db, passkey_id, user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Passkey not found")
     await db.commit()
+
+
+@router.post("/me/passkeys/register/start", response_model=schemas.PasskeyRegisterStartResponse)
+async def passkey_register_start(response: Response, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    session_id = passkey_service.new_session_id()
+    options = await passkey_service.register_start(db, user, session_id=session_id)
+    await db.commit()
+    _set_passkey_cookie(response, session_id)
+    return schemas.PasskeyRegisterStartResponse(options=options, session_id=session_id)
+
+
+@router.post("/me/passkeys/register/finish", response_model=schemas.PasskeyResponse, status_code=status.HTTP_201_CREATED)
+async def passkey_register_finish(req: schemas.PasskeyRegisterFinishRequest, request: Request, response: Response, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_session)):
+    cookie_session = request.cookies.get(PASSKEY_COOKIE_NAME)
+    if not cookie_session or cookie_session != req.session_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkey session missing or mismatch.")
+    try:
+        passkey = await passkey_service.register_finish(db, user, session_id=req.session_id, credential_json=req.credential, suggested_name=req.name)
+    except passkey_service.PasskeyError as e:
+        await db.commit()
+        _clear_passkey_cookie(response)
+        raise _passkey_error_to_http(e)
+    await db.commit()
+    _clear_passkey_cookie(response)
+    return passkey
+
+
+@router.post("/login/passkey/start", response_model=schemas.PasskeyAuthStartResponse)
+async def passkey_login_start(req: schemas.PasskeyAuthStartRequest, response: Response, db: AsyncSession = Depends(get_session)):
+    bridge_user_id: str | None = None
+    if req.partial_token:
+        try:
+            payload = service.decode_token(req.partial_token)
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid partial token")
+        if payload.get("type") != "partial":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        bridge_for = payload.get("bridge_for") or []
+        if bridge_for and "passkey" not in bridge_for:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not valid for passkey login")
+        bridge_user_id = payload.get("sub")
+    session_id = passkey_service.new_session_id()
+    options = await passkey_service.authenticate_start(db, session_id=session_id, username=req.username, bridge_user_id=bridge_user_id)
+    await db.commit()
+    _set_passkey_cookie(response, session_id)
+    return schemas.PasskeyAuthStartResponse(options=options, session_id=session_id)
+
+
+@router.post("/login/passkey/finish", response_model=schemas.TokenResponse)
+async def passkey_login_finish(req: schemas.PasskeyAuthFinishRequest, request: Request, response: Response, db: AsyncSession = Depends(get_session)):
+    cookie_session = request.cookies.get(PASSKEY_COOKIE_NAME)
+    if not cookie_session or cookie_session != req.session_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passkey session missing or mismatch.")
+    bridge_user_id: str | None = None
+    if req.partial_token:
+        try:
+            payload = service.decode_token(req.partial_token)
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid partial token")
+        if payload.get("type") != "partial":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        bridge_for = payload.get("bridge_for") or []
+        if bridge_for and "passkey" not in bridge_for:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not valid for passkey login")
+        bridge_user_id = payload.get("sub")
+    try:
+        user, _passkey = await passkey_service.authenticate_finish(db, session_id=req.session_id, credential_json=req.credential, bridge_user_id=bridge_user_id)
+    except passkey_service.PasskeyError as e:
+        await db.commit()
+        _clear_passkey_cookie(response)
+        raise _passkey_error_to_http(e)
+    access = service.create_access_token(user.id, user.is_admin, user.permissions)
+    refresh = service.create_refresh_token(user.id)
+    await service.create_session(db, user.id, access, refresh)
+    await db.commit()
+    _clear_passkey_cookie(response)
+    return schemas.TokenResponse(access_token=access, refresh_token=refresh)

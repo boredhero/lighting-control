@@ -1,11 +1,16 @@
 const API_BASE = '/api'
 let isRefreshing = false
 
-async function request<T>(path: string, options: RequestInit = {}, _isRetry = false): Promise<T> {
+interface RequestOptions extends RequestInit {
+  withCookies?: boolean
+}
+
+async function request<T>(path: string, options: RequestOptions = {}, _isRetry = false): Promise<T> {
   const token = localStorage.getItem('access_token')
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...options.headers as Record<string, string> }
   if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const { withCookies, ...fetchOpts } = options
+  const res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers, credentials: withCookies ? 'include' : 'same-origin' })
   if (res.status === 401 && !_isRetry) {
     const body = await res.clone().json().catch(() => ({ detail: '' }))
     const isTokenIssue = !body.detail || body.detail === 'Invalid token' || body.detail === 'Token revoked' || body.detail === 'User not found'
@@ -44,8 +49,9 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
-  put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  get: <T>(path: string, opts?: { withCookies?: boolean }) => request<T>(path, { ...opts }),
+  post: <T>(path: string, body?: unknown, opts?: { withCookies?: boolean }) => request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined, ...opts }),
+  put: <T>(path: string, body?: unknown, opts?: { withCookies?: boolean }) => request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined, ...opts }),
+  patch: <T>(path: string, body?: unknown, opts?: { withCookies?: boolean }) => request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined, ...opts }),
+  delete: <T>(path: string, opts?: { withCookies?: boolean }) => request<T>(path, { method: 'DELETE', ...opts }),
 }

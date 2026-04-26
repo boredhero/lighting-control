@@ -33,6 +33,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     requires_totp: bool = False
     requires_passkey: bool = False
+    available_second_factors: list[str] = Field(default_factory=list)
     partial_token: str | None = None
 
 
@@ -145,4 +146,40 @@ class PasskeyResponse(BaseModel):
     id: str
     name: str
     created_at: datetime
+    last_used_at: datetime | None = None
+    transports: list[str] | None = None
+    aaguid: str | None = None
+    device_type: str | None = None
+    non_uv_only: bool = False
     model_config = ConfigDict(from_attributes=True)
+
+
+class PasskeyRegisterStartResponse(BaseModel):
+    options: dict
+    session_id: str
+
+
+class PasskeyRegisterFinishRequest(BaseModel):
+    credential: dict
+    name: str = Field(min_length=1, max_length=64)
+    session_id: str
+
+
+class PasskeyAuthStartRequest(BaseModel):
+    username: str | None = None
+    partial_token: str | None = None
+
+
+class PasskeyAuthStartResponse(BaseModel):
+    options: dict
+    session_id: str
+
+
+class PasskeyAuthFinishRequest(BaseModel):
+    credential: dict
+    session_id: str
+    partial_token: str | None = None
+
+
+class PasskeyRenameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
