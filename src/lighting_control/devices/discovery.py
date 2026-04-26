@@ -50,14 +50,50 @@ async def run_discovery_and_persist() -> int:
     return len(devices)
 
 
+def _translate_state_to_pilot_args(state: dict) -> dict:
+    """Translate frontend/WiZ protocol keys to PilotBuilder parameter names."""
+    translated = {}
+    if "dimming" in state:
+        translated["brightness"] = int(state["dimming"] * 255 / 100)
+    if "brightness" in state:
+        val = state["brightness"]
+        translated["brightness"] = int(val * 255 / 100) if val <= 100 else val
+    if "temp" in state:
+        translated["colortemp"] = state["temp"]
+    if "colortemp" in state:
+        translated["colortemp"] = state["colortemp"]
+    if "sceneId" in state or "scene" in state:
+        translated["scene"] = state.get("sceneId") or state.get("scene")
+    if "r" in state and "g" in state and "b" in state:
+        translated["rgb"] = (state["r"], state["g"], state["b"])
+    if "w" in state:
+        translated["warm_white"] = state["w"]
+    if "c" in state:
+        translated["cold_white"] = state["c"]
+    if "speed" in state:
+        translated["speed"] = state["speed"]
+    if "state" in state:
+        translated["state"] = state["state"]
+    return translated
+
+
 async def control_device(ip: str, state: dict) -> dict | None:
     """Send a setPilot command to a device. Returns the pilot result or None on failure."""
     try:
         bulb = wizlight(ip)
-        pilot = PilotBuilder(**state)
+        turn_off = state.pop("turn_off", False)
+        if turn_off:
+            await bulb.turn_off()
+            await bulb.updateState()
+            return bulb.state.pilotResult if bulb.state else {"state": False}
+        pilot_args = _translate_state_to_pilot_args(state)
+        logger.info(f"Sending setPilot to {ip}: {state} -> PilotBuilder({pilot_args})")
+        pilot = PilotBuilder(**pilot_args)
         await bulb.turn_on(pilot)
         await bulb.updateState()
-        return bulb.state.pilotResult if bulb.state else None
+        result = bulb.state.pilotResult if bulb.state else None
+        logger.info(f"Device {ip} responded: {result}")
+        return result
     except Exception as e:
-        logger.error(f"Failed to control device at {ip}: {e}")
+        logger.error(f"Failed to control device at {ip}: {e}", exc_info=True)
         return None

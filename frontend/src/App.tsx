@@ -12,6 +12,7 @@ import { QuickActionsPage } from '@/pages/QuickActionsPage'
 import { SchedulesPage } from '@/pages/SchedulesPage'
 import { RoomsZonesPage } from '@/pages/RoomsZonesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { RegisterPage } from '@/pages/RegisterPage'
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 
@@ -31,6 +32,7 @@ export default function App() {
         <Routes>
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/devices" element={<ProtectedRoute><DevicesPage /></ProtectedRoute>} />
           <Route path="/devices/:id" element={<ProtectedRoute><DeviceDetailPage /></ProtectedRoute>} />

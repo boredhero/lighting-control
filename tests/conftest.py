@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from lighting_control.db.base import Base
-from lighting_control.auth.models import User, SystemConfig, InviteCode
+from lighting_control.auth.models import Role, User, SystemConfig, InviteCode
 from lighting_control.auth.service import hash_password, create_access_token
 from lighting_control.devices.models import Device, Room, Zone, Group, GroupDevice
 
@@ -22,6 +22,24 @@ async def test_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def admin_role(test_db: AsyncSession) -> Role:
+    """Pre-created admin role."""
+    role = Role(id=str(uuid.uuid4()), name="Admin", is_system=True, is_admin=True, permissions={"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": True, "can_view_schedules": True, "can_manage_schedules": True, "can_manage_devices": True, "can_manage_users": True})
+    test_db.add(role)
+    await test_db.flush()
+    return role
+
+
+@pytest_asyncio.fixture
+async def user_role(test_db: AsyncSession) -> Role:
+    """Pre-created user role."""
+    role = Role(id=str(uuid.uuid4()), name="User", is_system=True, permissions={"can_control_devices": True, "can_execute_quick_actions": True, "can_manage_quick_actions": False, "can_view_schedules": True, "can_manage_schedules": False, "can_manage_devices": False, "can_manage_users": False})
+    test_db.add(role)
+    await test_db.flush()
+    return role
 
 
 @pytest_asyncio.fixture
@@ -74,9 +92,10 @@ async def two_rooms(test_db: AsyncSession) -> tuple[Room, Room]:
 
 
 @pytest_asyncio.fixture
-async def one_zone(test_db: AsyncSession) -> Zone:
-    """A single zone: Upstairs."""
-    z = Zone(id=str(uuid.uuid4()), name="Upstairs", sort_order=0)
+async def one_zone(test_db: AsyncSession, two_rooms: tuple[Room, Room]) -> Zone:
+    """A single zone: Upstairs, belonging to the Bedroom."""
+    _, r2 = two_rooms
+    z = Zone(id=str(uuid.uuid4()), name="Upstairs", room_id=r2.id, sort_order=0)
     test_db.add(z)
     await test_db.flush()
     return z
@@ -89,6 +108,22 @@ async def one_group(test_db: AsyncSession) -> Group:
     test_db.add(g)
     await test_db.flush()
     return g
+
+
+@pytest_asyncio.fixture
+async def app_client(test_db: AsyncSession):
+    """FastAPI httpx AsyncClient with the DB session overridden to test_db. Yields (client, app) so tests can override get_current_user per-case."""
+    from httpx import ASGITransport, AsyncClient
+    from lighting_control.main import create_app
+    from lighting_control.db.engine import get_session
+    app = create_app()
+    async def _override_session():
+        yield test_db
+    app.dependency_overrides[get_session] = _override_session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, app
+    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
