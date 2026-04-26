@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -18,8 +18,12 @@ export function TOTPSetupDialog({ open, onOpenChange }: Props) {
   const [qrImage, setQrImage] = useState('')
   const [code, setCode] = useState('')
   const [debugInfo, setDebugInfo] = useState('')
+  const [prevOpen, setPrevOpen] = useState(open)
   const queryClient = useQueryClient()
-  useEffect(() => { if (!open) { setStep('generate'); setSecret(''); setQrImage(''); setCode(''); setDebugInfo('') } }, [open])
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (!open) { setStep('generate'); setSecret(''); setQrImage(''); setCode(''); setDebugInfo('') }
+  }
   const setupMutation = useMutation({
     mutationFn: () => api.post<{ secret: string; qr_uri: string; qr_image: string }>('/auth/me/totp/setup'),
     onSuccess: (data) => { const d = data as { secret: string; qr_uri: string; qr_image: string }; setSecret(d.secret); setQrImage(d.qr_image); setCode(''); setDebugInfo('') ; setStep('verify') },

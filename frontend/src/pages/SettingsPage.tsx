@@ -39,8 +39,8 @@ export function SettingsPage() {
   const handleLogout = async () => { await logout(); navigate('/login') }
   const getRoleName = (roleId: string | null) => { const r = roles.find((role) => role.id === roleId); return r?.name ?? 'Unknown' }
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold">Settings</h2>
+    <div className="space-y-6 3xl:space-y-8 tv:space-y-12 max-w-2xl 3xl:max-w-3xl tv:max-w-4xl mx-auto">
+      <h2 className="text-xl 3xl:text-2xl tv:text-4xl font-semibold tracking-tight">Settings</h2>
       <Card className="bg-[var(--surface-1)] border-border">
         <CardHeader><CardTitle className="flex items-center gap-2"><Shield size={18} />Account</CardTitle></CardHeader>
         <CardContent className="space-y-4">
