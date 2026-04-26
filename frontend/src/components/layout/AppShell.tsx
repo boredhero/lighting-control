@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Lightbulb, Zap, Clock, Settings, DoorOpen, Menu } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useUIStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { PasskeyEnrollmentPrompt, isPasskeyPromptDismissed } from '@/components/PasskeyEnrollmentPrompt'
+import { listPasskeys, browserSupportsWebAuthn } from '@/lib/passkey'
+
+const PROMPT_SHOWN_KEY = 'passkey_prompt_shown_session'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -72,6 +78,23 @@ function MobileHeader() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
+  const { isAuthenticated, user } = useAuthStore()
+  const [promptOpen, setPromptOpen] = useState(false)
+  useEffect(() => {
+    if (!isAuthenticated || !user) return
+    if (!browserSupportsWebAuthn()) return
+    if (isPasskeyPromptDismissed()) return
+    if (sessionStorage.getItem(PROMPT_SHOWN_KEY) === '1') return
+    let cancelled = false
+    listPasskeys().then((pks) => {
+      if (cancelled) return
+      if (pks.length === 0) {
+        sessionStorage.setItem(PROMPT_SHOWN_KEY, '1')
+        setPromptOpen(true)
+      }
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [isAuthenticated, user])
   return (
     <div className="flex h-screen">
       <DesktopSidebar />
@@ -94,6 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
         <MobileBottomNav />
       </div>
+      <PasskeyEnrollmentPrompt open={promptOpen} onOpenChange={setPromptOpen} />
     </div>
   )
 }
