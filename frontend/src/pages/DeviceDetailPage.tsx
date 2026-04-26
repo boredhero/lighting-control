@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
+import { TemperatureSlider, BrightnessSlider } from '@/components/LightingSlider'
 import { Badge } from '@/components/ui/badge'
 import { Lightbulb, Power, Pencil, Check, X, Thermometer, Palette } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -54,8 +54,8 @@ export function DeviceDetailPage() {
   if (!device) return <p className="text-muted-foreground">Loading...</p>
   const hexToRgb = (hex: string) => { const r = parseInt(hex.slice(1, 3), 16); const g = parseInt(hex.slice(3, 5), 16); const b = parseInt(hex.slice(5, 7), 16); return { r, g, b } }
   const handleColorChange = (hex: string) => { setColor(hex); if (colorTimer.current) clearTimeout(colorTimer.current); colorTimer.current = setTimeout(() => { const { r, g, b } = hexToRgb(hex); controlMutation.mutate({ r, g, b, dimming: brightness }) }, 300) }
-  const handleBrightness = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setBrightness(v); if (brightnessTimer.current) clearTimeout(brightnessTimer.current); brightnessTimer.current = setTimeout(() => { controlMutation.mutate({ dimming: v }) }, 300) }
-  const handleColorTemp = (value: number | readonly number[]) => { const v = Array.isArray(value) ? value[0] : value; setColorTemp(v); if (tempTimer.current) clearTimeout(tempTimer.current); tempTimer.current = setTimeout(() => { controlMutation.mutate({ temp: v, dimming: brightness }) }, 300) }
+  const handleBrightness = (v: number) => { setBrightness(v); if (brightnessTimer.current) clearTimeout(brightnessTimer.current); brightnessTimer.current = setTimeout(() => { controlMutation.mutate({ dimming: v }) }, 300) }
+  const handleColorTemp = (v: number) => { setColorTemp(v); if (tempTimer.current) clearTimeout(tempTimer.current); tempTimer.current = setTimeout(() => { controlMutation.mutate({ temp: v, dimming: brightness }) }, 300) }
   const isOn = device.last_state?.state !== false
   const handleToggle = () => { controlMutation.mutate(isOn ? { turn_off: true } : { dimming: brightness }) }
   const palette = getDevicePalette(device, 'card')
@@ -90,19 +90,28 @@ export function DeviceDetailPage() {
               <HexColorPicker color={color} onChange={handleColorChange} style={{ width: '100%', maxWidth: 'min(28rem, 100%)' }} />
               <p className="text-sm 3xl:text-base tv:text-xl text-muted-foreground font-mono">{color}</p>
             </TabsContent>
-            <TabsContent value="temp" className="flex flex-col gap-4 3xl:gap-6">
-              <div className="flex items-center gap-3 3xl:gap-5"><span className="text-xs 3xl:text-sm tv:text-lg text-muted-foreground w-14 tv:w-20">2200K</span><Slider value={[colorTemp]} onValueChange={handleColorTemp} min={2200} max={6500} step={100} className="flex-1" /><span className="text-xs 3xl:text-sm tv:text-lg font-medium w-14 tv:w-20 text-right">{colorTemp}K</span></div>
+            <TabsContent value="temp" className="flex flex-col gap-4 3xl:gap-6 pt-9 3xl:pt-11 tv:pt-14">
+              <TemperatureSlider value={colorTemp} onChange={handleColorTemp} min={2200} max={6500} step={100} />
+              <div className="flex justify-between text-[10px] 3xl:text-xs tv:text-base text-muted-foreground px-1 font-medium">
+                <span>2200K</span><span>2700K</span><span>4000K</span><span>5000K</span><span>6500K</span>
+              </div>
               <p className="text-sm 3xl:text-base tv:text-xl text-muted-foreground text-center">{tempToLabel(colorTemp)}</p>
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
       <Card className={cardClass} style={cardStyle}>
-        <CardHeader className="3xl:px-6 tv:px-9 3xl:pt-2 tv:pt-4"><CardTitle className="3xl:text-lg tv:text-2xl">Brightness</CardTitle></CardHeader>
-        <CardContent className="flex items-center gap-4 3xl:gap-6 3xl:px-6 tv:px-9 3xl:pb-2 tv:pb-4">
-          <span className="text-sm 3xl:text-base tv:text-lg text-muted-foreground w-8 tv:w-14">0%</span>
-          <Slider value={[brightness]} onValueChange={handleBrightness} max={100} step={1} className="flex-1" />
-          <span className="text-sm 3xl:text-base tv:text-lg font-medium w-10 tv:w-16 text-right">{brightness}%</span>
+        <CardHeader className="3xl:px-6 tv:px-9 3xl:pt-2 tv:pt-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="3xl:text-lg tv:text-2xl">Brightness</CardTitle>
+            <span className="text-2xl 3xl:text-3xl tv:text-5xl font-bold tracking-tight tabular-nums">{brightness}%</span>
+          </div>
+        </CardHeader>
+        <CardContent className="3xl:px-6 tv:px-9 3xl:pb-2 tv:pb-4 pt-9 3xl:pt-11 tv:pt-14">
+          <BrightnessSlider value={brightness} onChange={handleBrightness} min={0} max={100} step={1} />
+          <div className="flex justify-between text-[10px] 3xl:text-xs tv:text-base text-muted-foreground px-1 font-medium mt-2">
+            <span>0%</span><span>50%</span><span>100%</span>
+          </div>
         </CardContent>
       </Card>
       <Card className={cardClass} style={cardStyle}>
