@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, DoorOpen, MapPin, Users, Lightbulb, Trash2, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDevicePalette } from '@/lib/devicePalette'
 
@@ -19,6 +19,21 @@ interface HierarchyGroup { id: string; name: string; icon: string | null; device
 interface Hierarchy { rooms: HierarchyRoom[]; unassigned: HierarchyDevice[]; groups: HierarchyGroup[] }
 interface AllDevice { id: string; name: string; mac: string; ip: string; is_online: boolean; last_state: Record<string, unknown> | null }
 interface Room { id: string; name: string }
+function RoomIcon({ icon }: { icon: string | null }) {
+  if (icon) return <span className="inline-flex items-center justify-center w-[18px] h-[18px] 3xl:w-6 3xl:h-6 tv:w-8 tv:h-8 text-base 3xl:text-xl tv:text-2xl leading-none shrink-0">{icon}</span>
+  return <DoorOpen className="size-[18px] 3xl:size-6 tv:size-8 shrink-0" />
+}
+
+function ZoneIcon({ icon }: { icon: string | null }) {
+  if (icon) return <span className="inline-flex items-center justify-center w-[14px] h-[14px] text-sm leading-none shrink-0">{icon}</span>
+  return <MapPin size={14} className="shrink-0" />
+}
+
+function GroupIcon({ icon }: { icon: string | null }) {
+  if (icon) return <span className="inline-flex items-center justify-center w-[18px] h-[18px] text-base leading-none shrink-0">{icon}</span>
+  return <Users size={18} className="shrink-0" />
+}
+
 function DeviceChip({ device, onRemove }: { device: HierarchyDevice; onRemove?: () => void }) {
   const palette = getDevicePalette(device, 'chip')
   const chipStyle = palette ? { backgroundColor: palette.bg, color: palette.iconFg } : undefined
@@ -56,15 +71,38 @@ function AddDeviceDialog({ open, onOpenChange, onAdd, allDevices, excludeIds, ti
   )
 }
 
+const ICON_PRESETS = ['🍳', '🛏️', '🛁', '🛋️', '🍽️', '💼', '🚪', '🚗', '🌿', '🌅', '📦', '🏚️', '🚿', '🧺', '🪑', '🎮', '📺', '🎵', '🌙', '💡']
+
+function IconPickerField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Icon (optional)</Label>
+      <div className="flex items-center gap-2">
+        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="🍳 or any emoji / unicode" maxLength={24} className="w-32 text-center text-lg" />
+        <p className="text-xs text-muted-foreground">Tip: open your OS emoji picker (Cmd-Ctrl-Space / Win-period)</p>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {ICON_PRESETS.map((preset) => (
+          <button key={preset} type="button" onClick={() => onChange(preset)} className={`size-9 3xl:size-10 rounded-md text-lg transition-colors hover:bg-[var(--surface-3)] ${value === preset ? 'bg-[var(--surface-3)] ring-1 ring-primary' : 'bg-[var(--surface-2)]'}`}>{preset}</button>
+        ))}
+        {value && (
+          <button type="button" onClick={() => onChange('')} className="size-9 3xl:size-10 rounded-md text-xs transition-colors hover:bg-[var(--surface-3)] bg-[var(--surface-2)] text-muted-foreground">clear</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CreateDialog({ open, onOpenChange, type, rooms }: { open: boolean; onOpenChange: (o: boolean) => void; type: 'room' | 'zone' | 'group'; rooms: Room[] }) {
   const [name, setName] = useState('')
+  const [icon, setIcon] = useState('')
   const [roomId, setRoomId] = useState('')
   const queryClient = useQueryClient()
   const endpoint = type === 'room' ? '/rooms' : type === 'zone' ? '/zones' : '/groups'
   const label = type.charAt(0).toUpperCase() + type.slice(1)
   const createMutation = useMutation({
-    mutationFn: () => { const body: Record<string, unknown> = { name }; if (type === 'zone') body.room_id = roomId; return api.post(endpoint, body) },
-    onSuccess: () => { toast.success(`${label} created`); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }); queryClient.invalidateQueries({ queryKey: ['rooms'] }); queryClient.invalidateQueries({ queryKey: ['zones'] }); setName(''); setRoomId(''); onOpenChange(false) },
+    mutationFn: () => { const body: Record<string, unknown> = { name, icon: icon.trim() || null }; if (type === 'zone') body.room_id = roomId; if (type === 'group') body.device_ids = []; return api.post(endpoint, body) },
+    onSuccess: () => { toast.success(`${label} created`); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }); queryClient.invalidateQueries({ queryKey: ['rooms'] }); queryClient.invalidateQueries({ queryKey: ['zones'] }); setName(''); setIcon(''); setRoomId(''); onOpenChange(false) },
     onError: (err: Error) => toast.error(err.message),
   })
   return (
@@ -82,6 +120,7 @@ function CreateDialog({ open, onOpenChange, type, rooms }: { open: boolean; onOp
               </Select>
             </div>
           )}
+          <IconPickerField value={icon} onChange={setIcon} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={!name.trim() || (type === 'zone' && !roomId) || createMutation.isPending}>{createMutation.isPending ? 'Creating...' : `Create ${label}`}</Button>
@@ -92,9 +131,57 @@ function CreateDialog({ open, onOpenChange, type, rooms }: { open: boolean; onOp
   )
 }
 
+function EditHierarchyDialog({ open, onOpenChange, target, hierarchy }: { open: boolean; onOpenChange: (o: boolean) => void; target: { type: 'room' | 'zone' | 'group'; id: string; name: string; icon: string | null } | null; hierarchy: Hierarchy | undefined }) {
+  const [name, setName] = useState('')
+  const [icon, setIcon] = useState('')
+  const [prevTargetId, setPrevTargetId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  if (target && target.id !== prevTargetId) {
+    setPrevTargetId(target.id)
+    setName(target.name)
+    setIcon(target.icon ?? '')
+  }
+  if (!target && prevTargetId !== null) setPrevTargetId(null)
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!target) throw new Error('No target')
+      const body: Record<string, unknown> = { name, icon: icon.trim() || null }
+      if (target.type === 'room') return api.put(`/rooms/${target.id}`, body)
+      if (target.type === 'zone') {
+        const zoneRoom = hierarchy?.rooms.find((r) => r.zones.some((z) => z.id === target.id))
+        body.room_id = zoneRoom?.id ?? ''
+        return api.put(`/zones/${target.id}`, body)
+      }
+      const group = hierarchy?.groups.find((g) => g.id === target.id)
+      body.device_ids = group?.device_ids ?? []
+      return api.put(`/groups/${target.id}`, body)
+    },
+    onSuccess: () => { toast.success('Updated'); queryClient.invalidateQueries({ queryKey: ['hierarchy'] }); queryClient.invalidateQueries({ queryKey: ['rooms'] }); onOpenChange(false) },
+    onError: (err: Error) => toast.error(err.message),
+  })
+  if (!target) return null
+  const label = target.type.charAt(0).toUpperCase() + target.type.slice(1)
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-[var(--surface-1)] border-border max-w-sm">
+        <DialogHeader><DialogTitle>Edit {label}</DialogTitle></DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate() }} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
+          <IconPickerField value={icon} onChange={setIcon} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={!name.trim() || updateMutation.isPending}>{updateMutation.isPending ? 'Saving...' : 'Save'}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function RoomsZonesPage() {
   const [createType, setCreateType] = useState<'room' | 'zone' | 'group' | null>(null)
   const [addDeviceTo, setAddDeviceTo] = useState<{ type: 'room' | 'zone' | 'group'; id: string; name: string } | null>(null)
+  const [editTarget, setEditTarget] = useState<{ type: 'room' | 'zone' | 'group'; id: string; name: string; icon: string | null } | null>(null)
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const queryClient = useQueryClient()
@@ -143,10 +230,11 @@ export function RoomsZonesPage() {
                 <CardContent className="p-0">
                   <button onClick={() => toggleRoom(room.id)} className="flex items-center gap-3 3xl:gap-4 tv:gap-6 p-4 3xl:p-5 tv:p-7 w-full text-left hover:bg-white/[0.03] rounded-t-2xl transition-colors">
                     {isExpanded ? <ChevronDown className="size-4 3xl:size-5 tv:size-7" /> : <ChevronRight className="size-4 3xl:size-5 tv:size-7" />}
-                    <DoorOpen className="size-[18px] 3xl:size-6 tv:size-8" />
+                    <RoomIcon icon={room.icon} />
                     <span className="font-medium flex-1">{room.name}</span>
                     <span className="text-xs 3xl:text-sm text-muted-foreground">{totalDevices} device(s), {room.zones.length} zone(s)</span>
                     <Button variant="ghost" size="icon" className="ml-2 tv:size-12" onClick={(e) => { e.stopPropagation(); setAddDeviceTo({ type: 'room', id: room.id, name: room.name }) }}><Plus className="size-[14px] tv:size-6" /></Button>
+                    <Button variant="ghost" size="icon" className="tv:size-12" onClick={(e) => { e.stopPropagation(); setEditTarget({ type: 'room', id: room.id, name: room.name, icon: room.icon }) }}><Pencil className="size-[14px] tv:size-6" /></Button>
                     <Button variant="ghost" size="icon" className="tv:size-12" onClick={(e) => { e.stopPropagation(); deleteRoomMutation.mutate(room.id) }}><Trash2 className="size-[14px] tv:size-6 text-destructive" /></Button>
                   </button>
                   {isExpanded && (
@@ -154,10 +242,11 @@ export function RoomsZonesPage() {
                       {room.zones.filter((z) => filterMatch(z.name) || z.devices.some((d) => filterMatch(d.name))).map((zone) => (
                         <div key={zone.id} className="pl-6 border-l-2 border-[var(--surface-3)]">
                           <div className="flex items-center gap-2 mb-2">
-                            <MapPin size={14} />
+                            <ZoneIcon icon={zone.icon} />
                             <span className="text-sm font-medium">{zone.name}</span>
                             <span className="text-xs text-muted-foreground">{zone.devices.length} device(s)</span>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddDeviceTo({ type: 'zone', id: zone.id, name: zone.name })}><Plus size={12} /></Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditTarget({ type: 'zone', id: zone.id, name: zone.name, icon: zone.icon })}><Pencil size={12} /></Button>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteZoneMutation.mutate(zone.id)}><Trash2 size={12} className="text-destructive" /></Button>
                           </div>
                           <div className="flex flex-wrap gap-1 3xl:gap-2 tv:gap-3">{zone.devices.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} onRemove={() => removeFromZone(d.id, room.id)} />)}</div>
@@ -188,10 +277,11 @@ export function RoomsZonesPage() {
             <Card key={group.id} className="bg-[var(--surface-1)] border-border">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Users size={18} />
+                  <GroupIcon icon={group.icon} />
                   <span className="font-medium flex-1">{group.name}</span>
                   <span className="text-xs text-muted-foreground">{group.device_ids.length} device(s)</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAddDeviceTo({ type: 'group', id: group.id, name: group.name })}><Plus size={14} /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditTarget({ type: 'group', id: group.id, name: group.name, icon: group.icon })}><Pencil size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteGroupMutation.mutate(group.id)}><Trash2 size={14} className="text-destructive" /></Button>
                 </div>
                 <div className="flex flex-wrap gap-1 3xl:gap-2 tv:gap-3">
@@ -204,6 +294,7 @@ export function RoomsZonesPage() {
       </Tabs>
       {createType && <CreateDialog open={true} onOpenChange={(open) => { if (!open) setCreateType(null) }} type={createType} rooms={rooms} />}
       {addDeviceTo && <AddDeviceDialog open={true} onOpenChange={(open) => { if (!open) setAddDeviceTo(null) }} onAdd={handleAddDevice} allDevices={allDevices} excludeIds={addDeviceTo.type === 'group' ? new Set(hierarchy?.groups.find((g) => g.id === addDeviceTo.id)?.device_ids ?? []) : assignedInRoomOrZone} title={`Add device to ${addDeviceTo.name}`} />}
+      <EditHierarchyDialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null) }} target={editTarget} hierarchy={hierarchy} />
     </div>
   )
 }
