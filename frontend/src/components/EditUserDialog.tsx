@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -22,16 +22,18 @@ export function EditUserDialog({ open, onOpenChange, user: editUser }: Props) {
   const [roleId, setRoleId] = useState('')
   const [hasExpiry, setHasExpiry] = useState(false)
   const [expiresAt, setExpiresAt] = useState('')
+  const [prevUser, setPrevUser] = useState<UserItem | null>(editUser)
   const queryClient = useQueryClient()
   const { data: roles = [] } = useQuery<RoleItem[]>({ queryKey: ['roles'], queryFn: () => api.get('/auth/roles') })
   const selectedRole = roles.find((r) => r.id === roleId)
-  useEffect(() => {
+  if (editUser !== prevUser) {
+    setPrevUser(editUser)
     if (editUser) {
       setRoleId(editUser.role_id ?? '')
       setHasExpiry(!!editUser.guest_expires_at)
       setExpiresAt(editUser.guest_expires_at ? new Date(editUser.guest_expires_at).toISOString().slice(0, 16) : '')
     }
-  }, [editUser])
+  }
   const updateMutation = useMutation({
     mutationFn: (data: { role_id: string; guest_expires_at: string | null }) => api.put(`/auth/users/${editUser?.id}`, data),
     onSuccess: () => { toast.success('User updated'); queryClient.invalidateQueries({ queryKey: ['users'] }); onOpenChange(false) },

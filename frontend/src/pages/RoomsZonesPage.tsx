@@ -24,11 +24,12 @@ function DeviceChip({ device, onRemove }: { device: HierarchyDevice; onRemove?: 
   const chipStyle = palette ? { backgroundColor: palette.bg, color: palette.iconFg } : undefined
   const iconStyle = palette ? { color: palette.iconFg } : undefined
   const iconClass = palette ? '' : (device.is_online ? 'text-green-400' : 'text-muted-foreground')
+  const baseClass = 'flex items-center gap-2 3xl:gap-3 px-2 py-1 3xl:px-3 3xl:py-1.5 tv:px-4 tv:py-2 rounded-lg text-sm transition-colors'
   return (
-    <div className={palette ? 'flex items-center gap-2 px-2 py-1 rounded text-sm' : 'flex items-center gap-2 px-2 py-1 bg-[var(--surface-3)] rounded text-sm'} style={chipStyle}>
-      <Lightbulb size={12} className={iconClass} style={iconStyle} />
+    <div className={palette ? baseClass : `${baseClass} bg-[var(--surface-3)]`} style={chipStyle}>
+      <Lightbulb className={`size-3 3xl:size-4 tv:size-5 shrink-0 ${iconClass}`} style={iconStyle} />
       <span className="truncate">{device.name}</span>
-      {onRemove && <button onClick={onRemove} className="text-muted-foreground hover:text-destructive"><Trash2 size={12} /></button>}
+      {onRemove && <button onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="size-3 3xl:size-4 tv:size-5" /></button>}
     </div>
   )
 }
@@ -120,11 +121,11 @@ export function RoomsZonesPage() {
   hierarchy?.rooms.forEach((r) => { r.devices.forEach((d) => assignedInRoomOrZone.add(d.id)); r.zones.forEach((z) => z.devices.forEach((d) => assignedInRoomOrZone.add(d.id))) })
   const filterMatch = (name: string) => !search || name.toLowerCase().includes(search.toLowerCase())
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 3xl:space-y-6 tv:space-y-8">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h2 className="text-xl font-semibold">Rooms, Zones & Groups</h2>
+        <h2 className="text-xl 3xl:text-2xl tv:text-4xl font-semibold tracking-tight">Rooms, Zones & Groups</h2>
         <div className="flex items-center gap-2">
-          <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs 3xl:max-w-sm tv:max-w-md tv:h-12 tv:text-lg" />
         </div>
       </div>
       <Tabs defaultValue="rooms">
@@ -140,13 +141,13 @@ export function RoomsZonesPage() {
             return (
               <Card key={room.id} className="bg-[var(--surface-1)] border-border">
                 <CardContent className="p-0">
-                  <button onClick={() => toggleRoom(room.id)} className="flex items-center gap-3 p-4 w-full text-left hover:bg-[var(--surface-2)] rounded-t-lg transition-colors">
-                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    <DoorOpen size={18} />
+                  <button onClick={() => toggleRoom(room.id)} className="flex items-center gap-3 3xl:gap-4 tv:gap-6 p-4 3xl:p-5 tv:p-7 w-full text-left hover:bg-white/[0.03] rounded-t-2xl transition-colors">
+                    {isExpanded ? <ChevronDown className="size-4 3xl:size-5 tv:size-7" /> : <ChevronRight className="size-4 3xl:size-5 tv:size-7" />}
+                    <DoorOpen className="size-[18px] 3xl:size-6 tv:size-8" />
                     <span className="font-medium flex-1">{room.name}</span>
-                    <span className="text-xs text-muted-foreground">{totalDevices} device(s), {room.zones.length} zone(s)</span>
-                    <Button variant="ghost" size="icon" className="ml-2" onClick={(e) => { e.stopPropagation(); setAddDeviceTo({ type: 'room', id: room.id, name: room.name }) }}><Plus size={14} /></Button>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deleteRoomMutation.mutate(room.id) }}><Trash2 size={14} className="text-destructive" /></Button>
+                    <span className="text-xs 3xl:text-sm text-muted-foreground">{totalDevices} device(s), {room.zones.length} zone(s)</span>
+                    <Button variant="ghost" size="icon" className="ml-2 tv:size-12" onClick={(e) => { e.stopPropagation(); setAddDeviceTo({ type: 'room', id: room.id, name: room.name }) }}><Plus className="size-[14px] tv:size-6" /></Button>
+                    <Button variant="ghost" size="icon" className="tv:size-12" onClick={(e) => { e.stopPropagation(); deleteRoomMutation.mutate(room.id) }}><Trash2 className="size-[14px] tv:size-6 text-destructive" /></Button>
                   </button>
                   {isExpanded && (
                     <div className="px-4 pb-4 space-y-3">
@@ -159,13 +160,13 @@ export function RoomsZonesPage() {
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddDeviceTo({ type: 'zone', id: zone.id, name: zone.name })}><Plus size={12} /></Button>
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteZoneMutation.mutate(zone.id)}><Trash2 size={12} className="text-destructive" /></Button>
                           </div>
-                          <div className="flex flex-wrap gap-1">{zone.devices.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} onRemove={() => removeFromZone(d.id, room.id)} />)}</div>
+                          <div className="flex flex-wrap gap-1 3xl:gap-2 tv:gap-3">{zone.devices.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} onRemove={() => removeFromZone(d.id, room.id)} />)}</div>
                         </div>
                       ))}
                       {room.devices.filter((d) => filterMatch(d.name)).length > 0 && (
                         <div className="pl-6 border-l-2 border-dashed border-[var(--surface-3)]">
                           <p className="text-xs text-muted-foreground mb-2">Unzoned</p>
-                          <div className="flex flex-wrap gap-1">{room.devices.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} onRemove={() => removeFromRoom(d.id)} />)}</div>
+                          <div className="flex flex-wrap gap-1 3xl:gap-2 tv:gap-3">{room.devices.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} onRemove={() => removeFromRoom(d.id)} />)}</div>
                         </div>
                       )}
                     </div>
@@ -177,7 +178,7 @@ export function RoomsZonesPage() {
           {hierarchy && hierarchy.unassigned.filter((d) => filterMatch(d.name)).length > 0 && (
             <Card className="bg-[var(--surface-1)] border-border border-dashed">
               <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Unassigned Devices</CardTitle></CardHeader>
-              <CardContent><div className="flex flex-wrap gap-1">{hierarchy.unassigned.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} />)}</div></CardContent>
+              <CardContent><div className="flex flex-wrap gap-1 3xl:gap-2 tv:gap-3">{hierarchy.unassigned.filter((d) => filterMatch(d.name)).map((d) => <DeviceChip key={d.id} device={d} />)}</div></CardContent>
             </Card>
           )}
         </TabsContent>
@@ -193,7 +194,7 @@ export function RoomsZonesPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAddDeviceTo({ type: 'group', id: group.id, name: group.name })}><Plus size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteGroupMutation.mutate(group.id)}><Trash2 size={14} className="text-destructive" /></Button>
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1 3xl:gap-2 tv:gap-3">
                   {group.device_ids.map((did) => { const d = getDeviceById(did); return d ? <DeviceChip key={did} device={d} onRemove={() => removeFromGroup(group.id, did)} /> : null })}
                 </div>
               </CardContent>
