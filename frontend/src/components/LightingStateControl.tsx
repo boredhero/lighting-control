@@ -27,8 +27,8 @@ const DEFAULT_TEMP = 4000
 
 function inferMode(v: StateValue): Mode {
   if (v.turn_off === true || v.state === false) return 'off'
-  if (v.scene !== undefined || v.sceneId !== undefined) return 'scene'
-  if (v.temp !== undefined) return 'temp'
+  if ((typeof v.scene === 'number' && v.scene > 0) || (typeof v.sceneId === 'number' && v.sceneId > 0)) return 'scene'
+  if (typeof v.temp === 'number') return 'temp'
   return 'color'
 }
 
@@ -46,8 +46,8 @@ function inferTemp(v: StateValue, fallback: number): number {
 }
 
 function inferScene(v: StateValue): number | null {
-  if (typeof v.scene === 'number') return v.scene
-  if (typeof v.sceneId === 'number') return v.sceneId
+  if (typeof v.scene === 'number' && v.scene > 0) return v.scene
+  if (typeof v.sceneId === 'number' && v.sceneId > 0) return v.sceneId
   return null
 }
 

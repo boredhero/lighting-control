@@ -111,19 +111,20 @@ async def _load_active_passkeys(db: AsyncSession, user_id: str) -> list[Passkey]
 
 
 async def register_start(db: AsyncSession, user: User, *, session_id: str) -> dict:
-    """Build registration options and persist the challenge."""
+    """Build registration options and persist the challenge.
+
+    resident_key=DISCOURAGED so we use server-side credentials.
+    user_verification=DISCOURAGED so touch-only authenticators work without PIN.
+    Platform authenticators (fingerprint/face) are still offered when available.
+    """
     if user.webauthn_user_handle is None:
         user.webauthn_user_handle = os.urandom(64)
         await db.flush()
     existing = await _load_active_passkeys(db, user.id)
-    exclude = [
-        PublicKeyCredentialDescriptor(id=p.credential_id, transports=_transports_to_descriptors(p.transports))
-        for p in existing
-    ]
+    exclude = [PublicKeyCredentialDescriptor(id=p.credential_id) for p in existing]
     selection = AuthenticatorSelectionCriteria(
-        resident_key=ResidentKeyRequirement.PREFERRED,
-        require_resident_key=False,
-        user_verification=UserVerificationRequirement.PREFERRED,
+        resident_key=ResidentKeyRequirement.DISCOURAGED,
+        user_verification=UserVerificationRequirement.DISCOURAGED,
     )
     options = webauthn.generate_registration_options(
         rp_id=settings.WEBAUTHN_RP_ID,
@@ -134,7 +135,6 @@ async def register_start(db: AsyncSession, user: User, *, session_id: str) -> di
         timeout=60000,
         authenticator_selection=selection,
         exclude_credentials=exclude,
-        supported_pub_key_algs=PUB_KEY_ALGS,
     )
     await _persist_challenge(db, session_id=session_id, challenge=options.challenge, kind="register", user_id=user.id, expected_user_handle=user.webauthn_user_handle)
     return webauthn_options_to_json(options)
@@ -244,18 +244,14 @@ async def authenticate_start(
         result = await db.execute(select(User).options(selectinload(User.passkeys)).where(User.username == username))
         target_user = result.scalar_one_or_none()
         if target_user is not None:
-            allow = [
-                PublicKeyCredentialDescriptor(id=p.credential_id, transports=_transports_to_descriptors(p.transports))
-                for p in target_user.passkeys
-                if p.revoked_at is None
-            ]
+            allow = [PublicKeyCredentialDescriptor(id=p.credential_id) for p in target_user.passkeys if p.revoked_at is None]
         if not allow:
             allow = [PublicKeyCredentialDescriptor(id=fid) for fid in _fake_credential_ids(username)]
     options = webauthn.generate_authentication_options(
         rp_id=settings.WEBAUTHN_RP_ID,
         timeout=60000,
         allow_credentials=allow if allow else None,
-        user_verification=UserVerificationRequirement.PREFERRED,
+        user_verification=UserVerificationRequirement.DISCOURAGED,
     )
     await _persist_challenge(db, session_id=session_id, challenge=options.challenge, kind="authenticate", user_id=target_user.id if target_user else None, bridge_user_id=bridge_user_id)
     return webauthn_options_to_json(options)

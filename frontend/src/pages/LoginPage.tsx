@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/api/client'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { PasskeyButton } from '@/components/PasskeyButton'
-import { browserSupportsWebAuthn, browserSupportsWebAuthnAutofill, loginWithPasskey, isUserCancellation } from '@/lib/passkey'
+import { browserSupportsWebAuthn, loginWithPasskey } from '@/lib/passkey'
 
 type Stage = 'initial' | 'password' | 'second_factor'
 
@@ -24,7 +24,6 @@ export function LoginPage() {
   const [checkingSetup, setCheckingSetup] = useState(true)
   const navigate = useNavigate()
   const { login, loginTotp, finalizePasskeyLogin, isAuthenticated } = useAuthStore()
-  const conditionalAbortRef = useRef<AbortController | null>(null)
   const passkeySupported = browserSupportsWebAuthn()
 
   useEffect(() => {
@@ -35,31 +34,12 @@ export function LoginPage() {
     }).catch(() => setCheckingSetup(false))
   }, [navigate, isAuthenticated])
 
-  useEffect(() => {
-    if (checkingSetup || stage !== 'initial' || !passkeySupported) return
-    let cancelled = false
-    const ac = new AbortController()
-    conditionalAbortRef.current = ac
-    ;(async () => {
-      try {
-        if (!(await browserSupportsWebAuthnAutofill())) return
-      } catch { return }
-      if (cancelled) return
-      try {
-        const result = await loginWithPasskey({ useBrowserAutofill: true, signal: ac.signal })
-        if (cancelled) return
-        await finalizePasskeyLogin(result.access_token, result.refresh_token)
-        navigate('/')
-      } catch (err) {
-        if (cancelled || isUserCancellation(err)) return
-      }
-    })()
-    return () => { cancelled = true; ac.abort() }
-  }, [checkingSetup, stage, passkeySupported, finalizePasskeyLogin, navigate])
-
   const handlePasskeyLogin = async () => {
-    conditionalAbortRef.current?.abort()
-    const result = await loginWithPasskey({ username: username.trim() || undefined })
+    if (!username.trim()) {
+      toast.error('Enter your username first')
+      return
+    }
+    const result = await loginWithPasskey({ username: username.trim() })
     await finalizePasskeyLogin(result.access_token, result.refresh_token)
     navigate('/')
   }
@@ -116,7 +96,7 @@ export function LoginPage() {
             <div className="flex flex-col gap-4" data-testid="login-stage-initial">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="username">Username</Label>
-                <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username webauthn" placeholder="Username (optional for passkey)" data-testid="username-input" />
+                <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="Username" data-testid="username-input" />
               </div>
               {passkeySupported ? (
                 <PasskeyButton label="Sign in with a passkey" onClick={handlePasskeyLogin} className="w-full" testId="passkey-login-button" />
