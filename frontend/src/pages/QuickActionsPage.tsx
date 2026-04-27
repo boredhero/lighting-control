@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Zap, Plus } from 'lucide-react'
 import { CreateQuickActionDialog } from '@/components/CreateQuickActionDialog'
-import { getDevicePalette } from '@/lib/devicePalette'
+import { getStatePalette } from '@/lib/devicePalette'
 import { toast } from 'sonner'
 import type { CSSProperties } from 'react'
 
@@ -14,11 +14,7 @@ interface QuickActionTarget { id: string; target_type: string; target_id: string
 interface QuickAction { id: string; name: string; icon: string | null; sort_order: number; targets: QuickActionTarget[] }
 
 function paletteForTargets(targets: QuickActionTarget[]) {
-  const first = targets[0]
-  if (!first) return null
-  const s = first.state
-  if (s.turn_off === true || s.state === false) return null
-  return getDevicePalette({ is_online: true, last_state: s }, 'card')
+  return getStatePalette(targets[0]?.state, 'card')
 }
 
 export function QuickActionsPage() {
