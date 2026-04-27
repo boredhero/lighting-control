@@ -55,7 +55,10 @@ export function QuickActionsPage() {
             const palette = paletteForTargets(qa.targets)
             const isOff = palette === null
             const isPending = pendingId === qa.id
-            const cardStyle: CSSProperties = palette ? { backgroundColor: palette.bg, borderColor: palette.border } : {}
+            const cardStyle: CSSProperties = {
+              ['--card-glow' as never]: palette ? palette.iconBg : 'transparent',
+              ...(palette && { backgroundColor: palette.bg, borderColor: palette.border }),
+            }
             const iconStyle = palette ? { backgroundColor: palette.iconBg, color: palette.iconFg } : { backgroundColor: 'var(--surface-3)', color: 'var(--text-disabled)' }
             const pillStyle = palette ? { backgroundColor: palette.pillBg, color: palette.pillText } : { backgroundColor: 'var(--surface-3)', color: 'var(--text-disabled)' }
             const targetLabel = qa.targets.length === 1 ? '1 target' : `${qa.targets.length} targets`
