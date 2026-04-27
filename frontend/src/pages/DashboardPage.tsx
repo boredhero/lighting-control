@@ -3,9 +3,12 @@ import { api } from '@/api/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Lightbulb, Zap } from 'lucide-react'
 import { toast } from 'sonner'
+import { getStatePalette } from '@/lib/devicePalette'
+import type { CSSProperties } from 'react'
 
 interface Device { id: string; name: string; is_online: boolean }
-interface QuickAction { id: string; name: string; icon: string | null; sort_order: number }
+interface QuickActionTarget { state: Record<string, unknown> }
+interface QuickAction { id: string; name: string; icon: string | null; sort_order: number; targets: QuickActionTarget[] }
 
 export function DashboardPage() {
   const queryClient = useQueryClient()
@@ -24,14 +27,24 @@ export function DashboardPage() {
           <p className="text-muted-foreground">No quick actions yet. Create one from the Quick Actions page.</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 3xl:grid-cols-7 4xl:grid-cols-8 tv:grid-cols-10 gap-3 3xl:gap-4 tv:gap-6">
-            {quickActions.map((qa) => (
-              <Card key={qa.id} className="bg-[var(--surface-1)] border-border cursor-pointer hover:bg-[var(--surface-2)] active:bg-[var(--surface-3)]" onClick={() => executeMutation.mutate(qa.id)}>
-                <CardContent className="flex flex-col items-center justify-center p-4 3xl:p-6 tv:p-9 gap-2 3xl:gap-3 tv:gap-4">
-                  <Zap className="size-6 3xl:size-8 tv:size-12 text-[var(--color-amber)]" />
-                  <span className="text-sm 3xl:text-base tv:text-xl font-medium text-center">{qa.name}</span>
-                </CardContent>
-              </Card>
-            ))}
+            {quickActions.map((qa) => {
+              const palette = getStatePalette(qa.targets[0]?.state, 'card')
+              const isOff = palette === null
+              const cardStyle: CSSProperties = {
+                ['--card-glow' as never]: palette ? palette.iconBg : 'transparent',
+                ...(palette && { backgroundColor: palette.bg, borderColor: palette.border }),
+              }
+              const iconStyle = palette ? { color: palette.iconFg } : { color: 'var(--color-amber)' }
+              const nameStyle: CSSProperties = palette ? { color: palette.iconFg } : {}
+              return (
+                <Card key={qa.id} className={`${isOff ? 'bg-[var(--surface-1)] border-border hover:bg-[var(--surface-2)] active:bg-[var(--surface-3)]' : 'border'} cursor-pointer hover:brightness-110 transition`} style={cardStyle} onClick={() => executeMutation.mutate(qa.id)}>
+                  <CardContent className="flex flex-col items-center justify-center p-4 3xl:p-6 tv:p-9 gap-2 3xl:gap-3 tv:gap-4">
+                    <Zap className="size-6 3xl:size-8 tv:size-12" style={iconStyle} />
+                    <span className="text-sm 3xl:text-base tv:text-xl font-medium text-center" style={nameStyle}>{qa.name}</span>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>

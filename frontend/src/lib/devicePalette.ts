@@ -108,3 +108,9 @@ export function getDeviceBrightness(device: DeviceLike): number | null {
   if (typeof device.last_state.dimming === 'number') return device.last_state.dimming as number
   return null
 }
+
+export function getStatePalette(state: Record<string, unknown> | null | undefined, variant: PaletteVariant = 'card'): DevicePalette | null {
+  if (!state) return null
+  if (state.turn_off === true || state.state === false) return null
+  return getDevicePalette({ is_online: true, last_state: state }, variant)
+}
