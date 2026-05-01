@@ -2,7 +2,16 @@
 from celery import Celery
 from lighting_control.config import settings
 
-celery = Celery("lighting_control", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
+celery = Celery(
+    "lighting_control",
+    broker=settings.REDIS_URL,
+    backend=settings.REDIS_URL,
+    include=[
+        "lighting_control.tasks.discovery",
+        "lighting_control.tasks.scheduling",
+        "lighting_control.tasks.notifications",
+    ],
+)
 celery.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -15,4 +24,3 @@ celery.conf.update(
         "recalc-sun-times": {"task": "lighting_control.tasks.scheduling.recalc_sun_times", "schedule": 3600.0},
     },
 )
-celery.autodiscover_tasks(["lighting_control.tasks"])
